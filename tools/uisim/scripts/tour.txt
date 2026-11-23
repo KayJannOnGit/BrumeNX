@@ -1,0 +1,27 @@
+# uisim - a tour of the menu (seconds, action)
+1.0 shot verrou
+1.5 press A
+2.1 press A
+2.7 press A
+8.0 shot roue
+8.5 press R
+10.0 shot apps
+12.5 press R
+14.0 shot album
+14.5 press R
+16.0 shot manettes
+16.5 press R
+18.0 shot reglages
+18.5 press A
+20.0 shot reglages-ouvert
+20.5 press B
+21.5 press Y
+23.0 shot reglages-xmb
+23.5 press Y
+24.5 press L
+25.0 press L
+25.5 press L
+26.0 press L
+28.0 press Plus
+29.0 shot alimentation
+29.5 press B

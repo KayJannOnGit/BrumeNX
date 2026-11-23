@@ -1,0 +1,20 @@
+# uisim v92 - the top bar with the finger (5 pages + Alimentation), then Réglages > Son: « Musique d'ambiance » is a simple
+# switch now (the nappe, on or off: « Mes musiques », « Morceau », « Morceau suivant » are gone)
+0.5 press A
+1.0 press A
+1.5 press A
+7.0 touch 630 52
+8.5 shot doigt-album
+9.0 touch 760 52
+10.5 shot doigt-reglages
+11.0 press Right
+11.5 press Right
+12.6 press A
+13.5 press Down
+13.9 press Down
+14.3 press Down
+14.7 press Down
+15.1 press Down
+16.0 shot son-colonne
+16.5 press A
+17.5 shot son-ambiance

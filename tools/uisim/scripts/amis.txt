@@ -1,0 +1,65 @@
+# uisim v95 - the Amis page (Nextendo, canned answers: no network here) and the Discord QR
+# no client_id -> signed out (the choices, a refused sign-in, waiting for the browser, the phone's QR) -> signed in (the list,
+# a request, a friend playing an installed game, one playing a game we do not have, the list scrolled) -> add a friend
+# (the keyboard answers SW-4821-0937-1166) -> the next look brings changes (notifications) -> the Discord QR, with / without a link
+0.5 press A
+1.0 press A
+1.5 press A
+5.0 demo titre
+6.0 demo amis 3
+6.5 press R
+7.0 press R
+7.5 press R
+8.0 press R
+9.5 shot amis-sans-appli
+10.0 demo amis 0
+11.0 shot amis-connexion
+11.5 press Down
+12.3 shot amis-connexion-tel
+12.5 demo amis 6
+13.3 shot amis-refus
+13.5 demo amis 5
+14.5 shot amis-attente
+15.0 demo amis 2
+16.2 shot amis-telephone
+16.5 press B
+17.0 demo amis 1
+18.6 shot amis-liste
+19.0 press Down
+19.7 shot amis-ligne-discord
+20.0 press Down
+20.7 shot amis-demande
+21.0 press Down
+21.8 shot amis-leo
+22.2 press Down
+22.9 shot amis-ines
+23.2 press Down
+23.9 shot amis-sam
+24.2 press Down
+24.5 press Down
+24.8 press Down
+25.1 press Down
+25.4 press Down
+26.3 shot amis-bas
+26.6 press Up
+26.8 press Up
+27.0 press Up
+27.2 press Up
+27.4 press Up
+27.6 press Up
+27.8 press Up
+28.0 press Up
+28.2 press Up
+28.35 press Up
+28.7 press A
+29.6 shot amis-ajout
+30.0 demo amis 4
+31.0 shot amis-notifs
+32.0 demo discord 1
+32.5 shot discord-entree
+33.2 shot discord-qr
+33.6 press B
+34.2 demo discord 0
+35.0 shot discord-vide
+35.4 press B
+36.0 shot amis-fin

@@ -1,0 +1,41 @@
+# uisim v98 - Spotify (a made-up service: « demo spotify <n> », Spotify.cpp BRUME_UISIM): the top bar's line while it plays,
+# the panel (ZL) playing then paused, the library, a playlist, a track chosen, then every state before the music: the first
+# connection (pairing), off, refused, not installed, starting; and the top bar's line while paused
+0.5 press A
+1.0 press A
+1.5 press A
+6.5 demo spotify 2
+8.2 shot sp-barre
+8.4 press ZL
+9.4 shot sp-lecture
+9.6 press X
+10.4 shot sp-pause
+10.6 press A
+11.4 shot sp-biblio
+11.6 press Down
+11.9 press A
+12.8 shot sp-titres
+13.0 press Down
+13.3 press A
+13.6 press Plus
+13.8 press Plus
+14.5 shot sp-joue
+14.7 press ZL
+15.6 shot sp-barre2
+15.8 demo spotify 1
+16.0 press ZL
+17.0 shot sp-appairage
+17.2 demo spotify 0
+17.9 shot sp-eteint
+18.1 demo spotify 4
+18.8 shot sp-refuse
+19.0 demo spotify 5
+19.6 shot sp-absent
+19.8 demo spotify 6
+21.0 shot sp-demarrage
+21.2 demo spotify 3
+21.5 press B
+22.6 shot sp-barre-pause
+23.0 demo spotify 1
+23.3 press ZL
+30.5 shot sp-appairage-annonce

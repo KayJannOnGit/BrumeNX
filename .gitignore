@@ -1,0 +1,6 @@
+build/
+assets/sounds/
+assets/models/
+assets/ui/
+dist/
+__pycache__/

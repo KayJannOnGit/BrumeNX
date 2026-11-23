@@ -1,0 +1,13 @@
+# uisim v77 - the notifications (PS4-like motion) and the task centre (demo tasks: the sim has no network)
+0.5 press A
+1.0 press A
+1.5 press A
+8.0 demo taches
+8.15 shot notif-entree
+8.6 shot notif-pile
+9.5 press ZR
+9.9 shot taches-panneau
+11.0 press ZR
+12.0 demo fin
+12.5 shot notif-fin
+16.2 shot notif-sortie

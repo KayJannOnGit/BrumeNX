@@ -1,0 +1,28 @@
+# uisim v78 - the new surface: notifications, the task panel, the power panel, the profiles; the error and restart popups
+0.5 press A
+1.0 press A
+1.5 press A
+7.0 demo taches
+7.7 shot surf-notifs
+8.0 press ZR
+8.55 shot surf-taches
+9.0 press ZR
+9.8 press Plus
+9.95 shot surf-power-entree
+10.5 shot surf-power
+10.7 press Down
+10.8 shot surf-power-glisse
+11.2 press B
+12.0 touch 90 46
+12.15 shot surf-profils-entree
+12.8 shot surf-profils
+13.2 press B
+14.0 demo erreur
+14.12 shot pop-erreur-entree
+14.9 shot pop-erreur
+15.2 press A
+15.9 demo redemarrer
+16.7 shot pop-redemarrer
+16.9 press Right
+17.05 shot pop-redemarrer-focus
+17.3 press B

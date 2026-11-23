@@ -1,0 +1,16 @@
+# uisim v87 (fusion) - le parcours PS4 puis une veille : au réveil, on repart de « Appuie sur un bouton »
+0.05 demo verrou 1
+0.6 press B
+1.4 shot fv-invite
+1.8 press A
+2.8 shot fv-qui
+3.2 press A
+4.0 press A
+4.6 press A
+5.2 press A
+9.0 shot fv-roue
+9.5 demo veille
+10.2 shot fv-reveil
+11.5 shot fv-reveil-2
+12.0 press A
+13.0 shot fv-reveil-qui

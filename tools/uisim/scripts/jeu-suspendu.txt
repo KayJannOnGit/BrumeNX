@@ -1,0 +1,33 @@
+# uisim v89 - a game still running (HOME during it): its disc stays in the PS2, its box goes back to its place, open and empty.
+# Then ANOTHER game: « Fermer « … » ? » (Oui waits, turns red), the game closes, its box comes for its disc, closes, goes back,
+# then the other game's normal staging
+0.2 demo titre
+0.5 press A
+1.0 press A
+1.5 press A
+7.0 press Right
+8.5 press A
+10.5 press A
+15.0 demo home
+15.05 shot suspendu-attente
+15.45 shot suspendu-retour
+15.9 shot suspendu-retour2
+16.8 shot suspendu-boite-ouverte
+17.2 press Right
+18.2 shot suspendu-autre
+18.5 press A
+18.8 shot fermer-pop-entree
+19.6 shot fermer-pop
+20.9 shot fermer-pop-arme
+21.0 press Right
+21.3 press A
+21.7 shot fermer-gel
+22.0 shot range-vient
+22.5 shot range-vient2
+23.0 shot range-vol
+23.6 shot range-rentre
+24.2 shot range-ferme
+24.8 shot range-retourne
+25.4 shot autre-lance
+26.2 shot autre-lance2
+27.2 shot autre-lance3

@@ -1,0 +1,19 @@
+# uisim v86 (revue) - back from a game (HOME), then the console sleeps at once, while the screen is still held black
+# (Games: m_diveOutAt = now + 1000 until the frames are steady). After the wake: the lock screen, never a black screen.
+0.2 demo titre
+0.5 press A
+1.0 press A
+1.5 press A
+8.0 press A
+10.5 press A
+14.30 shot lance-noir
+15.0 demo retour
+15.0 demo lent
+15.05 shot retour-attente
+15.10 demo veille
+15.60 shot veille-reveil
+17.00 shot veille-reveil-2
+17.5 press A
+18.0 press A
+18.5 press A
+23.0 shot veille-deverrouille

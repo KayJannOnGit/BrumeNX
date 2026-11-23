@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brume — aperçu de l'interface</title>
+<style>
+  :root { --bg: #05060c; --fg: #9fb0d0; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font: 13px system-ui, sans-serif; }
+  #bar { padding: 8px 12px; display: flex; gap: 6px; flex-wrap: wrap; }
+  #bar a { color: var(--fg); text-decoration: none; padding: 3px 8px; border: 1px solid #2a3150; border-radius: 4px; }
+  canvas { display: block; max-width: 100%; height: auto; }
+  #err { white-space: pre-wrap; color: #f88; font: 12px monospace; }
+</style>
+</head>
+<body>
+<div id="bar"></div>
+<canvas id="c" width="1280" height="720"></canvas>
+<pre id="err"></pre>
+<script>
+// Replays the frames written by uisim (the REAL menu code run on the PC) with the REAL shaders (../../shaders, GLSL 460
+// turned into GLSL ES 3.00 like tools/preview.html). Fog, water cubes, the whole interface and (v73) the settings' glass
+// pebbles; not the other 3D (consoles,
+// boxes). ?shot=<name> one frame at 1280x720, otherwise every frame of out/index.json on a contact sheet.
+const qs = new URLSearchParams(location.search);
+const canvas = document.getElementById('c');
+const gl = canvas.getContext('webgl2', { antialias: false, preserveDrawingBuffer: true });
+const err = m => { document.getElementById('err').textContent += m + '\n'; };
+const W = 1280, H = 720;
+
+function toES(src, stage) {
+  src = src.replace(/#version\s+460/, '#version 300 es\nprecision highp float;\nprecision highp int;');
+  src = src.replace(/layout\s*\(\s*std140\s*,\s*binding\s*=\s*\d+\s*\)/g, 'layout(std140)');
+  src = src.replace(/layout\s*\(\s*binding\s*=\s*\d+\s*\)\s*uniform\s+sampler2D/g, 'uniform sampler2D');
+  if (stage === 'vert') {
+    src = src.replace(/layout\s*\(\s*location\s*=\s*\d+\s*\)\s*out/g, 'out');
+    // render targets are sampled with row 0 = the top (deko3d's upper-left origin): flip y when drawing into them
+    src = src.replace(/void\s+main\s*\(\s*\)\s*\{/, 'uniform float uSimFlip;\nvoid main() {');
+    const end = src.lastIndexOf('}');
+    src = src.slice(0, end) + '    gl_Position.y *= uSimFlip;\n}\n';
+  } else src = src.replace(/layout\s*\(\s*location\s*=\s*\d+\s*\)\s*in/g, 'in');
+  return src;
+}
+function samplers(src) {   // binding -> name, from the GLSL 460 source
+  const m = {}; for (const r of src.matchAll(/layout\s*\(\s*binding\s*=\s*(\d+)\s*\)\s*uniform\s+sampler2D\s+(\w+)/g)) m[+r[1]] = r[2];
+  return m;
+}
+function shader(type, src, name) {
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) err(name + ':\n' + gl.getShaderInfoLog(s));
+  return s;
+}
+function program(vs, fs, name, binds) {
+  const p = gl.createProgram();
+  gl.attachShader(p, shader(gl.VERTEX_SHADER, vs, name + ' (vs)'));
+  gl.attachShader(p, shader(gl.FRAGMENT_SHADER, fs, name + ' (fs)'));
+  gl.bindAttribLocation(p, 0, 'aPos'); gl.bindAttribLocation(p, 1, 'aUV'); gl.bindAttribLocation(p, 2, 'aColor'); gl.bindAttribLocation(p, 3, 'aParam');
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) err(name + ' link: ' + gl.getProgramInfoLog(p));
+  const bi = gl.getUniformBlockIndex(p, 'Scene');
+  if (bi !== gl.INVALID_INDEX) gl.uniformBlockBinding(p, bi, 0);
+  const mi = gl.getUniformBlockIndex(p, 'Mesh');                 // v73: the pebbles' block (binding 1)
+  if (mi !== gl.INVALID_INDEX) gl.uniformBlockBinding(p, mi, 1);
+  gl.useProgram(p);
+  for (const [unit, nm] of Object.entries(binds)) { const l = gl.getUniformLocation(p, nm); if (l) gl.uniform1i(l, +unit); }
+  return { p, flip: gl.getUniformLocation(p, 'uSimFlip') };
+}
+
+// a texture written by uisim: header w, h, deko3d format, bytes; then the data
+function bc1(w, h, d) {   // BC1 -> RGBA8 (first mip level)
+  const out = new Uint8Array(w * h * 4), bw = Math.max(1, (w + 3) >> 2), bh = Math.max(1, (h + 3) >> 2);
+  const c565 = v => [((v >> 11) & 31) * 255 / 31, ((v >> 5) & 63) * 255 / 63, (v & 31) * 255 / 31];
+  for (let by = 0; by < bh; by++) for (let bx = 0; bx < bw; bx++) {
+    const o = (by * bw + bx) * 8, a = d[o] | (d[o + 1] << 8), b = d[o + 2] | (d[o + 3] << 8);
+    const ca = c565(a), cb = c565(b), pal = [ca, cb];
+    if (a > b) { pal.push(ca.map((x, i) => (2 * x + cb[i]) / 3)); pal.push(ca.map((x, i) => (x + 2 * cb[i]) / 3)); }
+    else { pal.push(ca.map((x, i) => (x + cb[i]) / 2)); pal.push([0, 0, 0]); }
+    const bits = d[o + 4] | (d[o + 5] << 8) | (d[o + 6] << 16) | (d[o + 7] << 24);
+    for (let k = 0; k < 16; k++) {
+      const x = bx * 4 + (k & 3), y = by * 4 + (k >> 2); if (x >= w || y >= h) continue;
+      const c = pal[(bits >>> (2 * k)) & 3], q = (y * w + x) * 4;
+      out[q] = c[0]; out[q + 1] = c[1]; out[q + 2] = c[2]; out[q + 3] = 255;
+    }
+  }
+  return out;
+}
+const texCache = {};
+async function texture(id) {
+  if (texCache[id] !== undefined) return texCache[id];
+  let t = null;
+  try {
+    const r = await fetch('out/tex' + id + '.bin');
+    if (r.ok) {
+      const buf = await r.arrayBuffer(), h = new Uint32Array(buf, 0, 4), [w, hh, fmt] = h, data = new Uint8Array(buf, 16);
+      t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+      gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+      if (fmt === 1) gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, w, hh, 0, gl.RED, gl.UNSIGNED_BYTE, data.subarray(0, w * hh));
+      else if (fmt === 28) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, hh, 0, gl.RGBA, gl.UNSIGNED_BYTE, data.subarray(0, w * hh * 4));
+      else if (fmt === 32) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, hh, 0, gl.RGBA, gl.HALF_FLOAT, new Uint16Array(buf, 16, w * hh * 4));
+      else if (fmt >= 56 && fmt <= 63) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, hh, 0, gl.RGBA, gl.UNSIGNED_BYTE, bc1(w, hh, data));
+      else { gl.deleteTexture(t); t = null; }
+      if (t) for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR],
+                                   [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+    }
+  } catch (e) { err('texture ' + id + ' : ' + e); }
+  return texCache[id] = t;
+}
+
+let P = {}, black, ubo, vbo, targets = {}, shotFbo, shotTex, meshUbo, meshVbo, meshIbo, meshState = { cull: 0, blend: 0 };
+function target(id, w, h) {
+  if (targets[id]) return targets[id];
+  const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR],
+                        [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+  const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+  if (id === 'shot') {                                        // v73: the screen has a depth buffer (the pebbles)
+    const rb = gl.createRenderbuffer(); gl.bindRenderbuffer(gl.RENDERBUFFER, rb);
+    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, w, h);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rb);
+  }
+  return targets[id] = { t, f, w, h };
+}
+
+async function replay(name) {
+  const buf = await (await fetch('out/' + name + '.bin')).arrayBuffer();
+  // load every texture the frame binds first (async), then replay in one go
+  const recs = [];
+  for (let o = 0; o + 16 <= buf.byteLength;) {
+    const [type, a, b, bytes] = new Uint32Array(buf, o, 4);
+    recs.push({ type, a, b, data: buf.slice(o + 16, o + 16 + bytes) }); o += 16 + bytes;
+  }
+  for (const r of recs) if (r.type === 5) for (const id of new Uint32Array(r.data)) if (id !== 0) await texture(id);
+  let prog = null, ui = false, meshes = 0;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, shotFbo); gl.viewport(0, 0, W, H);
+  gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT); gl.disable(gl.BLEND);
+  const use = () => { if (prog) { gl.useProgram(prog.p); if (prog.flip) gl.uniform1f(prog.flip, -1); } };
+  for (const r of recs) {
+    switch (r.type) {
+      case 1: { const [w, h] = new Uint32Array(r.data); const t = target(r.a, w, h); gl.bindFramebuffer(gl.FRAMEBUFFER, t.f); gl.viewport(0, 0, w, h); gl.disable(gl.BLEND); gl.disable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE); ui = false; break; }
+      case 2: gl.bindFramebuffer(gl.FRAMEBUFFER, shotFbo); gl.viewport(0, 0, W, H); gl.disable(gl.BLEND); gl.disable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE); ui = false; break;
+      case 3: prog = P[r.a] || null; use(); break;
+      case 4: { const sc = new Float32Array(r.data.slice(0));
+              // v73: &light=<degrees> = where the icons' glass light comes from (uGlass.xy; 90 = above, 135 = top left):
+              // the preview has no gyroscope, this shows how the glass answers when the console is tilted
+              if (qs.has('light') && sc.length >= 128) { const a = (+qs.get('light')) * Math.PI / 180; sc[124] = Math.cos(a); sc[125] = -Math.sin(a); }
+              gl.bindBuffer(gl.UNIFORM_BUFFER, ubo); gl.bufferData(gl.UNIFORM_BUFFER, Math.max(r.data.byteLength, 1024), gl.DYNAMIC_DRAW);
+              gl.bufferSubData(gl.UNIFORM_BUFFER, 0, new Uint8Array(sc.buffer)); break; }
+      case 5: { const ids = new Uint32Array(r.data);
+                ids.forEach((id, unit) => { gl.activeTexture(gl.TEXTURE0 + unit);
+                  gl.bindTexture(gl.TEXTURE_2D, id === 0 ? (targets[0] ? targets[0].t : black) : (texCache[id] || black)); });
+                break; }
+      case 6: if (prog) { use(); gl.drawArrays(gl.TRIANGLES, 0, 3); } break;
+      // v90: the water cubes in their squares (program 9: cubebox_vsh + glass_fsh CUBES), 6 instances x 6 vertices
+      case 9: if (prog && prog === P[9]) { use(); gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, 6); } break;
+      case 7: if (prog === P[2] || prog === P[7] || prog === P[10] || prog === P[11]) {   // (v74: P[7] = the settings icons' glass, verre_fsh; v99: P[10] uilite)
+                use(); gl.bindBuffer(gl.ARRAY_BUFFER, vbo); gl.bufferData(gl.ARRAY_BUFFER, r.data, gl.STREAM_DRAW);
+                for (let i = 0; i < 4; i++) { gl.enableVertexAttribArray(i); gl.vertexAttribPointer(i, i < 2 ? 2 : 4, gl.FLOAT, false, 48, [0, 8, 16, 32][i]); }
+                gl.drawArrays(gl.TRIANGLES, 0, r.a);
+              } break;
+      case 8: gl.disable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE); gl.depthMask(true);
+              gl.enable(gl.BLEND); gl.blendFuncSeparate(gl.ONE, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA); ui = true; break;
+      // v73: the settings carousel's glass pebbles (icon_fsh): the screen + a depth buffer, like Gpu::BeginMesh
+      case 11: gl.bindFramebuffer(gl.FRAMEBUFFER, shotFbo); gl.viewport(0, 0, W, H); gl.disable(gl.BLEND);
+               gl.depthMask(true); gl.clearDepth(1); gl.clear(gl.DEPTH_BUFFER_BIT); meshState = { cull: 1, blend: 0 }; ui = false; break;
+      case 15: meshState = { cull: r.a, blend: r.b }; break;
+      case 12: meshes++;
+               if ((prog === P[4] || prog === P[3] || prog === P[5]) && r.data.byteLength > 512) {   // (v89: + consoles, boxes)
+                 const vb = r.a, ni = r.b, d = r.data;
+                 gl.bindBuffer(gl.UNIFORM_BUFFER, meshUbo); gl.bufferData(gl.UNIFORM_BUFFER, new Uint8Array(d, 0, 512), gl.DYNAMIC_DRAW);
+                 use();
+                 gl.bindBuffer(gl.ARRAY_BUFFER, meshVbo); gl.bufferData(gl.ARRAY_BUFFER, new Uint8Array(d, 512, vb), gl.STREAM_DRAW);
+                 for (let i = 0; i < 3; i++) { gl.enableVertexAttribArray(i); gl.vertexAttribPointer(i, i < 2 ? 3 : 2, gl.FLOAT, false, 32, [0, 12, 24][i]); }
+                 gl.disableVertexAttribArray(3);
+                 gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, meshIbo); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(d, 512 + vb, ni), gl.STREAM_DRAW);
+                 gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(!meshState.blend);
+                 if (meshState.cull & 1) { gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK); gl.frontFace(meshState.cull & 2 ? gl.CCW : gl.CW); }   // (y is flipped)
+                 else gl.disable(gl.CULL_FACE);
+                 if (meshState.blend) { gl.enable(gl.BLEND); gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA); }
+                 else gl.disable(gl.BLEND);
+                 gl.drawElements(gl.TRIANGLES, ni, gl.UNSIGNED_INT, 0);
+                 gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, ubo);
+               }
+               break;
+    }
+  }
+  return meshes;
+}
+
+async function main() {
+  if (!gl) { err('WebGL2 indisponible'); return; }
+  const get = f => fetch('../../shaders/' + f + '?' + Date.now()).then(r => r.text());
+  const [fsv, common, hazeF, glassF, uiV, uiF, meshV, iconF, verreF, meshF, boxF, cubeV, uiliteF, uisurfF] = await Promise.all(['fullscreen_vsh.glsl', 'common.glsl', 'haze_fsh.glsl', 'glass_fsh.glsl', 'ui_vsh.glsl', 'ui_fsh.glsl', 'mesh_vsh.glsl', 'icon_fsh.glsl', 'verre_fsh.glsl', 'mesh_fsh.glsl', 'box_fsh.glsl', 'cubebox_vsh.glsl', 'uilite_fsh.glsl', 'uisurf_fsh.glsl'].map(get));
+  const frag = body => toES('#version 460\n' + common + body, 'frag');
+  P[0] = program(toES(fsv, 'vert'), frag(hazeF), 'haze', samplers(hazeF));
+  P[1] = program(toES(fsv, 'vert'), frag(glassF), 'glass', samplers(glassF));
+  P[2] = program(toES(uiV, 'vert'), frag(uiF), 'ui', samplers(uiF));
+  P[4] = program(toES(meshV, 'vert'), frag(iconF), 'icon', samplers(iconF));   // v73: the glass pebbles (program 4, as in onBoot)
+  P[7] = program(toES(uiV, 'vert'), frag(verreF), 'verre', samplers(verreF));   // v74: the settings icons' glass (program 7: made by Assets::Load)
+  // v89: the consoles (program 3) - WebGL wants the same Mesh block in both stages (mesh_fsh has the Joy-Con colours at its end)
+  P[3] = program(toES(meshV.replace('vec4 uSH[9];', 'vec4 uSH[9]; vec4 uJoyL; vec4 uJoyR;'), 'vert'), frag(meshF), 'mesh', samplers(meshF));
+  P[5] = program(toES(meshV, 'vert'), frag(boxF), 'box', samplers(boxF));      // v89: the game boxes, their discs and cartridges (program 5)
+  // v90: the glass pass in two (programs 8 and 9, made after the settings' glass in onBoot): the room, then the cubes in their squares
+  P[8] = program(toES(fsv, 'vert'), frag('#define BG 1\n' + glassF), 'glassbg', samplers(glassF));
+  P[9] = program(toES('#version 460\n' + common + cubeV, 'vert'), frag('#define CUBES 1\n' + glassF), 'glasscube', samplers(glassF));
+  P[10] = program(toES(uiV, 'vert'), frag(uiliteF), 'uilite', samplers(uiliteF));   // v99 (perf): the interface's simple modes (program 10)
+  P[11] = program(toES(uiV, 'vert'), frag(uisurfF), 'uisurf', samplers(uisurfF));   // v99 (perf): its surfaces, the popups' backdrop (program 11)
+  meshUbo = gl.createBuffer(); gl.bindBufferBase(gl.UNIFORM_BUFFER, 1, meshUbo);
+  meshVbo = gl.createBuffer(); meshIbo = gl.createBuffer();
+  black = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, black);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]));
+  ubo = gl.createBuffer(); gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, ubo);
+  vbo = gl.createBuffer();
+  gl.bindVertexArray(gl.createVertexArray());
+  const s = target('shot', W, H); shotFbo = s.f; shotTex = s.t;
+  const shots = await (await fetch('out/index.json?' + Date.now())).json();
+  const bar = document.getElementById('bar');
+  bar.innerHTML = '<a href="?">tout</a>' + shots.map(n => `<a href="?shot=${n}">${n}</a>`).join('');
+  const one = qs.get('shot');
+  // v73: &zoom=x,y,w,h = only that part of the frame (menu px), enlarged with its real pixels (to judge the icons' glass)
+  const zr = (qs.get('zoom') || '').split(',').map(Number), zoom = zr.length === 4 && zr.every(v => v >= 0) && zr[2] > 0 && zr[3] > 0;
+  const src = zoom ? zr : [0, 0, W, H];
+  // v73: ?shot=a,b = two frames side by side (before / after: a frame kept in out/avant/ is « avant/<name> »)
+  const list = one ? one.split(',') : shots, cols = list.length > 1 ? 2 : 1, cw = cols > 1 ? 640 : W, ch = Math.round(cw * src[3] / src[2]);
+  canvas.width = cw * cols; canvas.height = ch * Math.ceil(list.length / cols);
+  for (let i = 0; i < list.length; i++) {
+    const meshes = await replay(list[i]);
+    const x = (i % cols) * cw, y = canvas.height - ((i / cols | 0) + 1) * ch;
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, shotFbo); gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+    gl.blitFramebuffer(src[0], src[1], src[0] + src[2], src[1] + src[3], x, y + ch, x + cw, y, gl.COLOR_BUFFER_BIT, zoom ? gl.NEAREST : gl.LINEAR);   // (row 0 = the top: flipped)
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
+    document.title = 'Brume — aperçu (' + (i + 1) + '/' + list.length + ')';
+  }
+  // the names, drawn on top with a 2D canvas copy
+  const c2 = document.createElement('canvas'); c2.width = canvas.width; c2.height = canvas.height;
+  const g = c2.getContext('2d'); g.drawImage(canvas, 0, 0); g.font = '600 15px system-ui'; g.fillStyle = '#ffd866';
+  list.forEach((n, i) => g.fillText(n, (i % cols) * cw + 8, (i / cols | 0) * ch + 20));
+  c2.id = 'sheet'; canvas.replaceWith(c2);
+  document.title = 'Brume — aperçu prêt';
+}
+main();
+</script>
+</body>
+</html>

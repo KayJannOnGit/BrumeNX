@@ -1,0 +1,49 @@
+# uisim v94 - les Joy-Con gardent leurs couleurs, s'endorment quand on ne les voit plus, la lumiere des rails, le stick droit
+0.5 press A
+1.0 press A
+1.5 press A
+7.0 press R
+7.5 press R
+8.0 press R
+10.0 shot mv-depart
+# le Joy-Con gauche enleve, il ne se reconnecte pas (en veille)
+10.5 demo paire 0
+10.6 demo rail 2
+11.2 shot mv-detache-g
+13.0 shot mv-g-flotte
+16.5 shot mv-g-veille
+# le stick droit tourne la Switch (comme la roue)
+17.0 demo stickx 1
+17.8 shot mv-stick-droite
+18.0 demo stickx 0
+18.0 demo sticky 1
+18.8 shot mv-stick-haut
+19.0 demo sticky 0
+# il se reveille (sans fil) : la lumiere douce sur le bord gauche
+20.0 demo paire 1
+20.15 shot mv-reveil-rail
+20.45 shot mv-reveil-rail2
+21.5 shot mv-reveil
+# remis sur son rail : la lumiere forte
+22.5 demo rail 3
+22.75 shot mv-fixe-rail
+23.05 shot mv-fixe-rail2
+# sur la page Jeux : les deux enleves (ils se connectent sans fil 1,2 s apres), puis remis
+24.0 press L
+24.5 press L
+25.0 press L
+26.5 demo rail 0
+27.85 shot mv-jeux-sans-fil
+29.5 demo rail 3
+29.75 shot mv-jeux-paire-rail
+30.05 shot mv-jeux-paire-rail2
+# d'autres Joy-Con (rose / vert) : retenus dans manettes.ini 2 s plus tard
+# le stick droit sur la roue (pour comparer le sens et les angles)
+30.5 demo sticky 1
+31.3 shot mv-roue-haut
+31.5 demo sticky 0
+31.5 demo stickx 1
+32.3 shot mv-roue-droite
+32.5 demo stickx 0
+33.0 demo couleurs 1
+36.5 shot mv-roses

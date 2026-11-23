@@ -1,0 +1,12 @@
+# uisim v93 - « vraies pochettes pour la Switch » : un jeu Switch (demo titre) avec sa vraie boîte GameTDB déjà sur la carte
+# (sdmc:/brume/jaquettes/switch/0100000000010000.btex, faite à la main pour l'essai) : elle remplit la face du boîtier
+# rouge, sans bande ajoutée ni icône sur fond flou ; puis le lancement (la boîte s'ouvre, la cartouche porte la jaquette)
+0.2 demo titre
+0.5 press A
+1.0 press A
+1.5 press A
+8.0 press A
+10.2 shot sw-boite
+10.5 press A
+11.2 shot sw-ouverte
+11.8 shot sw-cartouche

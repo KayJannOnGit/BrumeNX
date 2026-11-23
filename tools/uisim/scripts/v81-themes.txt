@@ -1,0 +1,97 @@
+# uisim v81 - the themes (Brume, Nuit profonde, Chrome), Ciel selon l'heure, La batterie c'est la brume, the lock in Chrome
+# (the themes / hour / battery are forced with « demo »; the Reglages path: themes-ui.txt)
+0.5 press A
+1.0 press A
+1.5 press A
+8.0 shot v81-brume
+8.2 demo theme 1
+9.2 shot v81-nuit-fondu
+12.5 shot v81-nuit
+13.0 demo theme 2
+13.6 shot v81-chrome-flot
+14.2 shot v81-chrome-fondu
+17.5 shot v81-chrome
+17.6 press A
+18.3 shot v81-chrome-onde
+20.0 shot v81-chrome-jeux
+20.2 press B
+23.0 press R
+23.6 press R
+24.2 press R
+24.8 press R
+25.4 press R
+27.5 shot v81-chrome-reglages
+28.0 demo theme 1
+28.7 shot v81-chrome-reflux
+31.5 shot v81-nuit-reglages
+32.0 demo theme 0
+35.5 shot v81-brume-reglages
+36.0 press L
+36.6 press L
+37.2 press L
+37.8 press L
+38.4 press L
+38.8 demo heure 6.3
+39.0 demo ciel 1
+39.8 shot v81-ciel-notif
+42.0 shot v81-ciel-aube
+42.5 demo heure 12
+45.5 shot v81-ciel-jour
+46.0 demo heure 19
+49.0 shot v81-ciel-soir
+49.5 demo heure 23.5
+52.5 shot v81-ciel-nuit
+53.0 demo heure 19
+53.0 demo theme 2
+56.5 shot v81-ciel-soir-chrome
+57.0 demo ciel 0
+57.0 demo theme 0
+57.5 demo batterie 60
+57.5 demo brumebat 1
+60.5 shot v81-bat-normale
+61.0 demo batterie 8
+61.6 shot v81-bat-notif-faible
+65.5 shot v81-bat-faible
+66.0 demo batterie 60
+66.0 demo charge 1
+66.6 shot v81-bat-notif-charge
+72.0 shot v81-bat-charge-creux
+74.25 shot v81-bat-charge-pic
+75.0 demo charge 0
+75.0 demo batterie 8
+75.0 demo theme 2
+80.0 shot v81-bat-faible-chrome
+80.2 demo batterie 60
+80.5 press B
+83.0 shot v81-chrome-verrou
+83.5 press A
+84.6 shot v81-chrome-verrou-1
+85.0 press A
+86.0 press A
+89.5 shot v81-chrome-arrivee
+# the Reglages path: Reglages > Brume > Theme > Chrome (carousel layout), the options list, then the pebbles in chrome
+90.0 demo theme 0
+92.0 press R
+92.6 press R
+93.2 press R
+93.8 press R
+94.4 press R
+96.0 press Right
+96.5 press Right
+97.0 press Right
+97.5 press Right
+98.0 press Right
+98.5 press Right
+99.0 press Right
+99.5 press Right
+100.5 press A
+101.8 shot v81-ui-categorie
+102.2 press A
+103.2 press Down
+103.7 press Down
+104.4 shot v81-ui-sur-chrome
+104.8 press A
+105.6 shot v81-ui-fondu
+108.6 shot v81-ui-chrome
+109.0 press B
+111.5 shot v81-ui-anneau-chrome

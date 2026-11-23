@@ -1,0 +1,15 @@
+# uisim v93 - Yass's card (tools/uisim/scripts/detection2-cartes.sh <card> <out> -> <out>/yass): v90 knew the 7 consoles; v93
+# finds the same ones (no notification for them) + the DS (RetroArch, switch/retroarch-ds/): it arrives, « Nouvel émulateur
+# détecté : RetroArch »
+0.5 press A
+1.0 press A
+1.5 press A
+4.2 shot d2y-intro
+6.0 shot d2y-ds-1
+6.6 shot d2y-ds-2
+7.6 shot d2y-ds-3
+9.5 shot d2y-roue
+10.0 press Right
+11.6 shot d2y-tour-1
+12.0 press Right
+13.6 shot d2y-tour-2

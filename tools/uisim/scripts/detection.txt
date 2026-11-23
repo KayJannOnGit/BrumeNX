@@ -1,0 +1,35 @@
+# uisim v90 - the emulators found by themselves. The fake card (tools/uisim/scripts/detection-carte.sh prepares it): NetherSX2
+# and RetroArch itself in switch/, PS2 and GameCube games, and « last time » only the Switch was known (emulateurs-detectes.txt)
+# -> the wheel: the Switch falls alone, then the PS2 arrives (new), the GameCube's hint (games, no emulator)
+0.5 press A
+1.0 press A
+1.5 press A
+4.2 shot det-intro
+6.0 shot det-arrivee-1
+6.4 shot det-arrivee-2
+6.9 shot det-arrivee-3
+7.6 shot det-arrivee-4
+9.5 shot det-roue
+# PPSSPP and a PSP game copied, back from a homebrew: the PSP arrives, the others make room
+11.0 pose sdmc:/switch/ppsspp-nx/PPSSPP.nro
+11.0 pose sdmc:/roms/psp/WipEout_Pure.iso
+11.1 demo retour
+14.9 shot det-psp-1
+15.4 shot det-psp-2
+16.0 shot det-psp-3
+17.5 shot det-psp-4
+# RetroArch's cores (mGBA, Mupen64Plus-Next): the N64 then the GBA arrive, one « RetroArch » notification
+19.0 pose sdmc:/retroarch/cores/mgba_libretro_libnx.nro
+19.0 pose sdmc:/retroarch/cores/mupen64plus_next_libretro_libnx.nro
+19.1 demo retour
+23.0 shot det-ra-1
+24.6 shot det-ra-2
+26.5 shot det-ra-3
+27.0 press Right
+28.4 shot det-tour
+# PPSSPP removed: the PSP leaves quietly
+29.0 enleve sdmc:/switch/ppsspp-nx/PPSSPP.nro
+29.1 demo retour
+33.0 shot det-depart-1
+34.0 shot det-depart-2
+35.5 shot det-depart-3

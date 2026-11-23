@@ -1,0 +1,5 @@
+# uisim - the ambient colour (set in the fake card's reglages.ini before the run)
+0.5 press A
+1.0 press A
+1.5 press A
+8.0 shot ambiance-roue

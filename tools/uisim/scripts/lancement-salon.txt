@@ -1,0 +1,14 @@
+# uisim v80 - a home console (the PS2): it turns, then black; here the launch fails (no donor game on the fake card): the
+# popup says why, the light and the soundscape come back
+0.5 press A
+1.0 press A
+1.5 press A
+7.0 press Right
+8.5 press A
+11.0 press A
+13.50 shot salon-avant
+13.65 shot salon-tourne
+13.85 shot salon-tourne2
+14.30 shot salon-noir
+15.40 shot salon-echec
+16.40 shot salon-echec2

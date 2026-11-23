@@ -1,0 +1,39 @@
+# uisim v84 - Réglages > Manettes: « Tester les manettes » (a made-up Pro Controller: HID is a stub in the preview), then
+# « Calibrer les sticks » (a popup) and « Changer l'assignation des boutons » (the preview has no system version: its error)
+0.5 press A
+1.0 press A
+1.5 press A
+7.0 press R
+7.5 press R
+8.0 press R
+8.5 press R
+9.0 press R
+10.6 press Right
+11.0 press Right
+11.4 press Right
+11.8 press Right
+13.2 press A
+13.8 press Down
+14.2 press Down
+14.8 shot mn-rangees
+15.0 press A
+15.25 shot mn-entree
+15.6 shot mn-entree2
+16.6 shot mn-compte
+17.7 shot mn-compte-fin
+18.5 shot mn-verdict
+19.2 shot mn-bouton-b
+20.2 shot mn-croix
+21.42 shot mn-gachette
+24.8 shot mn-accord
+26.0 hold B 1.0
+26.45 shot mn-maintien
+26.95 shot mn-sortie
+27.8 shot mn-retour
+28.5 press Down
+29.0 press A
+29.7 shot mn-calibrer
+30.4 press B
+31.2 press Down
+31.7 press A
+32.4 shot mn-assignation

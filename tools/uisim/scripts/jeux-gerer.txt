@@ -1,0 +1,18 @@
+# uisim v77 - the games screen (more room, the text hierarchy) and « Gérer »'s confirmation
+0.5 press A
+1.0 press A
+1.5 press A
+7.0 press Right
+8.5 press A
+11.0 shot jeux-ecran
+11.5 press Minus
+13.5 shot gerer
+14.0 press X
+14.12 shot confirm-entree
+14.8 shot confirm
+15.2 press X
+15.6 press Right
+16.2 shot confirm-supprimer
+16.6 press Left
+17.0 press A
+18.0 shot confirm-annule

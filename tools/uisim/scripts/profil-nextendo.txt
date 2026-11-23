@@ -1,0 +1,14 @@
+# uisim v96 - the profile page with « Image du profil » = Nextendo: the picture big, then in the top bar after closing
+# (the preview shows the textures as they are at the end: this script ends with the picture in the strip)
+0.5 press A
+1.0 press A
+1.5 press A
+5.0 demo batterie 58
+5.1 demo charge 0
+5.5 demo profil 1
+6.5 touch 90 46
+8.0 press Down
+8.3 press Right
+9.6 shot nx-page
+9.8 press B
+11.0 shot nx-barre

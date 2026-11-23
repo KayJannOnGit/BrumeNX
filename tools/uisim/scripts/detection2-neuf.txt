@@ -1,0 +1,33 @@
+# uisim v93 - « Brume doit tout détecter » : the card of a new user (tools/uisim/scripts/detection2-cartes.sh <card> <out> -> <out>/neuf).
+# Last time: the Switch and the PS2. Since: Tico's Snes9x module (sdmc:/tico/modules/tico-snes9x/, module.json read) -> the SNES
+# arrives after the intro (a block of glass, « SNES »), its notification; Mega Drive games without an emulator -> the hint.
+0.5 press A
+1.0 press A
+1.5 press A
+4.2 shot d2n-intro
+6.0 shot d2n-snes-1
+6.5 shot d2n-snes-2
+7.2 shot d2n-snes-3
+9.5 shot d2n-roue
+# RetroArch's melonDS and Genesis Plus GX cores and a DS game copied, back from a homebrew: the DS then the Mega Drive arrive
+# (the Master System and the Game Gear share Genesis Plus GX but have no games: they stay away)
+11.0 pose sdmc:/retroarch/cores/melonds_libretro_libnx.nro
+11.0 pose sdmc:/retroarch/cores/genesis_plus_gx_libretro_libnx.nro
+11.0 pose sdmc:/roms/nds/Mario_Kart_DS.nds
+11.1 demo retour
+14.9 shot d2n-ds-1
+15.5 shot d2n-ds-2
+16.6 shot d2n-ds-3
+17.2 shot d2n-md-1
+18.2 shot d2n-md-2
+20.0 shot d2n-md-3
+# the end of the ring (a soft knock: 5 consoles do not wrap), then the SNES and its games (the cartridge boxes, its two folders: roms/snes and tico/roms/snes)
+21.0 press Right
+22.6 shot d2n-tour-1
+23.0 press Left
+24.6 shot d2n-tour-2
+26.6 shot d2n-tour-3
+27.0 press A
+29.5 shot d2n-jeux
+30.0 press B
+32.0 shot d2n-fin

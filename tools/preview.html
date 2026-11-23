@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brume — aperçu des shaders</title>
+<style>
+  :root { --bg: #000; --fg: #9fb0d0; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 13px system-ui, sans-serif; }
+  #wrap { position: fixed; inset: 0; display: grid; place-items: center; }
+  canvas { width: min(100vw, 177.78vh); height: min(56.25vw, 100vh); display: block; }
+  #hud { position: fixed; left: 10px; bottom: 8px; opacity: .75; pointer-events: none; }
+  #err { position: fixed; inset: 10px; white-space: pre-wrap; color: #f88; font: 12px monospace; display: none; }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="c" width="1280" height="720"></canvas></div>
+<div id="hud"></div>
+<pre id="err"></pre>
+<script>
+// Runs the REAL shaders of the menu (../shaders/*.glsl), turned from GLSL 460
+// (deko3d / uam) into GLSL ES 3.00 by a few textual rewrites, with the same two
+// passes as the console: haze into a 384x216 target, then the full-screen glass.
+// URL options: ?t=12.5 freezes time, ?seed=123 fixes the cube layout.
+const HAZE_W = 384, HAZE_H = 216;
+const qs = new URLSearchParams(location.search);
+const canvas = document.getElementById('c');
+const gl = canvas.getContext('webgl2', { antialias: false });
+const err = m => { const e = document.getElementById('err'); e.style.display = 'block'; e.textContent += m + '\n'; };
+
+function toES(src, stage) {
+  src = src.replace(/#version\s+460/, '#version 300 es\nprecision highp float;\nprecision highp int;');
+  src = src.replace(/layout\s*\(\s*std140\s*,\s*binding\s*=\s*\d+\s*\)/g, 'layout(std140)');
+  src = src.replace(/layout\s*\(\s*binding\s*=\s*\d+\s*\)\s*uniform\s+sampler2D/g, 'uniform sampler2D');
+  if (stage === 'vert') src = src.replace(/layout\s*\(\s*location\s*=\s*\d+\s*\)\s*out/g, 'out');
+  else src = src.replace(/layout\s*\(\s*location\s*=\s*\d+\s*\)\s*in/g, 'in');
+  return src;
+}
+function shader(type, src, name) {
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) err(name + ':\n' + gl.getShaderInfoLog(s));
+  return s;
+}
+function program(vs, fs, name) {
+  const p = gl.createProgram();
+  gl.attachShader(p, shader(gl.VERTEX_SHADER, vs, name + ' (vs)'));
+  gl.attachShader(p, shader(gl.FRAGMENT_SHADER, fs, name + ' (fs)'));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) err(name + ' link: ' + gl.getProgramInfoLog(p));
+  const bi = gl.getUniformBlockIndex(p, 'Scene');
+  if (bi !== gl.INVALID_INDEX) gl.uniformBlockBinding(p, bi, 0);
+  return p;
+}
+
+// Same as FillScene in src/Entry.cpp.
+let seed = (qs.get('seed') | 0) || ((Math.random() * 0xFFFFFFFF) >>> 0) | 1;
+function rnd(s) { let x = s.v; x ^= x << 13; x >>>= 0; x ^= x >>> 17; x ^= x << 5; x >>>= 0; s.v = x; return (x & 0xFFFFFF) / 16777216; }
+function fillScene(u, now, w, h) {
+  u.set([w, h, now, 0], 0);
+  u.set([330, 0.30 + 6 * 0.09, now * 0.07, 0], 4);
+  const s = { v: seed >>> 0 };
+  const drift = 0.25 + 10 * 0.075, half = 0.20 + 5 * 0.045;
+  const px = [], py = [];
+  for (let i = 0; i < 3; i++) {
+    let x = 0, y = 0;
+    for (let tries = 0; tries < 12; tries++) {
+      const side = i === 0 ? -1 : i === 1 ? 1 : (rnd(s) < 0.5 ? -1 : 1);
+      x = side * (1.5 + rnd(s) * 1.1); y = -0.9 + rnd(s) * 2.3;
+      let ok = true;
+      for (let j = 0; j < i; j++) ok = ok && (x - px[j]) ** 2 + (y - py[j]) ** 2 > 1.96;
+      if (ok) break;
+    }
+    px.push(x); py.push(y);
+    const z = 6.2 + rnd(s) * 2.8;
+    const ph = rnd(s) * 6.2831853;
+    let ax = rnd(s) - 0.5, ay = rnd(s) - 0.5, az = rnd(s) - 0.5;
+    const al = Math.hypot(ax, ay, az) + 1e-4; ax /= al; ay /= al; az /= al;
+    const sz = half * (0.75 + rnd(s) * 0.5);
+    const a = (now * (0.10 + 0.05 * i) * drift + ph) * 0.5, sa = Math.sin(a);
+    u.set([x + 0.10 * Math.sin(now * 0.17 * drift + ph), y + 0.13 * Math.sin(now * 0.29 * drift + ph * 1.7), z, sz], 8 + i * 4);
+    u.set([ax * sa, ay * sa, az * sa, Math.cos(a)], 20 + i * 4);
+  }
+}
+
+async function main() {
+  if (!gl) { err('WebGL2 indisponible'); return; }
+  const get = f => fetch('../shaders/' + f + '?' + Date.now()).then(r => r.text());
+  const [vsh, common, hazeF, glassF] = await Promise.all(['fullscreen_vsh.glsl', 'common.glsl', 'haze_fsh.glsl', 'glass_fsh.glsl'].map(get));
+  const frag = body => toES('#version 460\n' + common + body, 'frag');
+  const vs = toES(vsh, 'vert');
+  const pHaze = program(vs, frag(hazeF), 'haze'), pGlass = program(vs, frag(glassF), 'glass');
+
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, HAZE_W, HAZE_H, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR],
+                        [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+  const fbo = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  const ubo = gl.createBuffer(), u = new Float32Array(32);
+  gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, ubo);
+  gl.bindVertexArray(gl.createVertexArray());
+
+  const t0 = performance.now(), fixed = qs.has('t') ? parseFloat(qs.get('t')) : null;
+  let frames = 0, last = t0;
+  function frame(now) {
+    const t = fixed !== null ? fixed : (now - t0) / 1000;
+    fillScene(u, t, 1280, 720);
+    gl.bindBuffer(gl.UNIFORM_BUFFER, ubo); gl.bufferData(gl.UNIFORM_BUFFER, u, gl.DYNAMIC_DRAW);
+    // The texture row 0 is the top on the console (deko3d upper-left origin); in GL
+    // row 0 is the bottom, so the haze is drawn flipped into the FBO by flipping
+    // the viewport... simpler: GL's texture() with vUV.y=0 at top reads row 0 too,
+    // and the haze pass wrote row 0 for vUV.y=0 - consistent, nothing to do.
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo); gl.viewport(0, 0, HAZE_W, HAZE_H);
+    gl.useProgram(pHaze); gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, 1280, 720);
+    gl.useProgram(pGlass); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.uniform1i(gl.getUniformLocation(pGlass, 'uHazeTex'), 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    frames++;
+    if (now - last > 1000) { document.getElementById('hud').textContent = `aperçu Brume — t=${t.toFixed(1)} s — graine ${seed} — ${frames} img/s (PC)`; frames = 0; last = now; }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+main();
+</script>
+</body>
+</html>

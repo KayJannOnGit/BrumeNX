@@ -1,0 +1,8 @@
+# uisim - the Profiles panel (touch the profile's pill, top left)
+0.5 press A
+1.0 press A
+1.5 press A
+7.0 touch 90 46
+8.5 shot profils
+9.0 press Down
+10.0 shot profils-2

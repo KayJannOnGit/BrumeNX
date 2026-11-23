@@ -1,0 +1,14 @@
+# uisim v94 - au demarrage, aucun Joy-Con (ni sur les rails, ni sans fil) : la Switch porte les couleurs de manettes.ini
+# (une manette Pro conduit le menu jusqu a la page, puis s en va ; lancer apres manettes-veille.txt, qui y laisse rose / vert), ses Joy-Con en veille a cote
+0.02 demo rail 0
+0.02 demo pro 1
+0.02 demo paire 0
+0.5 press A
+1.0 press A
+1.5 press A
+7.0 press R
+7.5 press R
+8.0 press R
+9.0 demo pro 0
+10.5 shot md-aucune
+12.5 shot md-aucune2

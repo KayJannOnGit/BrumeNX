@@ -1,0 +1,14 @@
+build/
+build-apercu/
+exefs/
+*.nso
+*.npdm
+*.nsp
+*.elf
+*.nro
+*.nacp
+*.map
+overlay.json
+source/font_outfit.inc
+source/font_ui.inc
+source/glyphs.inc

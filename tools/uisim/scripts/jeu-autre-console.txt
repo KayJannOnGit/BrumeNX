@@ -1,0 +1,21 @@
+# uisim v89 - a PS2 game still running, a Switch game chosen: « Fermer « … » ? », Oui: the PS2 game closes (its disc's way home is
+# heard: the PS2 is not on screen), then the Switch game's normal staging (its box opens, the cartridge flies into the Switch)
+0.2 demo titre
+0.5 press A
+1.0 press A
+1.5 press A
+7.0 press Right
+8.5 press A
+10.5 press A
+15.0 demo home
+16.8 press B
+18.6 press Left
+20.0 press A
+22.0 press A
+22.4 shot autre-pop
+24.0 press Right
+24.3 press A
+24.75 shot autre-ferme
+25.5 shot autre-ferme2
+26.4 shot autre-switch
+27.4 shot autre-switch2

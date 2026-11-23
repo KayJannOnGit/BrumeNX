@@ -1,0 +1,31 @@
+# uisim v89 - the same game again: no box, straight to the dive, it comes back where it was; back on the wheel its console
+# breathes a soft light (« EN COURS » under its name); then the game ends by itself: next time its screen is on, its disc goes home
+0.2 demo titre
+0.5 press A
+1.0 press A
+1.5 press A
+7.0 press Right
+8.5 press A
+10.5 press A
+15.0 demo home
+16.8 shot reprise-avant
+17.0 press A
+17.15 shot reprise-debut
+17.5 shot reprise-plongee
+18.2 shot reprise-noir
+19.6 demo home
+19.7 shot reprise-retour
+20.6 shot reprise-retour2
+20.8 press X
+21.6 shot x-fermer-pop
+21.8 press B
+22.4 press B
+24.0 shot roue-en-cours
+24.3 demo retour
+24.8 shot roue-plus-rien
+25.2 press A
+26.0 shot fini-ouvert
+26.4 shot fini-range-debut
+27.0 shot fini-range-vol
+27.8 shot fini-range-rentre
+29.2 shot fini-range-fin

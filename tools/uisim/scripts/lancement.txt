@@ -1,0 +1,21 @@
+# uisim v80 - a launch and the way back (a portable: the Switch, one fake game): the dive into the screen, the black that
+# holds while the entry sound goes into silence (kEntryLen), then back from the game - 4 slow frames (like the console
+# closing it): the screen stays black until the frames are steady, then the light comes back and the cartridge flies home
+0.2 demo titre
+0.5 press A
+1.0 press A
+1.5 press A
+8.0 press A
+10.5 press A
+12.50 shot plongee-avant
+12.70 shot plongee-debut
+12.90 shot plongee-milieu
+13.40 shot plongee-noir
+14.30 shot lance-noir
+15.0 demo retour
+15.0 demo lent
+15.05 shot retour-attente
+15.20 shot retour-lumiere
+15.45 shot retour-eclaire
+16.20 shot retour-vol
+18.80 shot retour-fin

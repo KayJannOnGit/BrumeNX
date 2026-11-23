@@ -1,0 +1,49 @@
+# uisim v96 - the top bar's battery (on battery, low, charging slow / fast, full) beside Spotify's line, then the profile page:
+# signed out, signed in (online), the choices, Image du profil = Nextendo, invisible, playing, « Qui joue ? », no client_id
+0.5 press A
+1.0 press A
+1.5 press A
+5.0 demo batterie 64
+5.1 demo charge 0
+6.5 shot bat-64
+6.6 demo batterie 12
+7.6 shot bat-faible
+7.7 demo charge 2
+7.8 demo batterie 41
+8.5 shot bat-charge
+8.9 shot bat-charge2
+9.0 demo charge 1
+9.1 demo batterie 100
+10.0 shot bat-pleine
+10.1 demo charge 0
+10.2 demo batterie 87
+10.3 demo spotify 2
+12.0 shot bat-spotify
+12.2 demo spotify 0
+12.5 demo profil 0
+13.0 touch 90 46
+14.5 shot profil-hors
+14.7 press B
+15.2 demo profil 1
+16.0 touch 90 46
+17.8 shot profil-connecte
+18.0 press Down
+18.4 press Right
+19.4 shot profil-image
+19.6 press Down
+19.9 press Right
+20.8 shot profil-invisible
+21.0 press B
+21.4 demo profil 2
+22.6 touch 90 46
+24.0 shot profil-joue
+24.2 press Up
+24.4 press Up
+24.6 press A
+25.4 shot profil-qui
+25.6 press B
+26.0 press B
+26.8 shot barre-nextendo
+27.0 demo profil 4
+27.4 touch 90 46
+28.8 shot profil-sansappli

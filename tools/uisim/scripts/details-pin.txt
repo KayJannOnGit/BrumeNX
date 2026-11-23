@@ -1,0 +1,43 @@
+# uisim v87 - the lock code like the PS4's: skip the power-on, who plays, the code (wrong, 5 wrong = the calm pause, right), the unlock
+0.05 demo verrou 1
+0.06 demo pin 213
+0.06 demo batterie 18
+0.8 press B
+1.3 shot v87-boot-saute
+3.0 press A
+4.0 press A
+4.3 shot v87-pin-arrivee
+5.0 shot v87-pin
+5.3 press Up
+5.6 press Up
+5.9 press Up
+6.2 press Up
+6.55 shot v87-pin-faux
+6.75 shot v87-pin-faux2
+7.5 press ZL
+7.8 press X
+8.0 shot v87-pin-deux
+8.1 press Up
+8.4 press R
+9.5 press Up
+9.8 press Up
+10.1 press Up
+10.4 press Up
+11.5 press Up
+11.8 press Up
+12.1 press Up
+12.4 press Up
+13.5 press Up
+13.8 press Up
+14.1 press Up
+14.4 press Up
+15.2 shot v87-pin-pause
+45.2 shot v87-pin-pause-fin
+45.6 touch 512 597
+45.9 press Down
+46.2 press Right
+46.4 shot v87-pin-trois
+46.5 touch 485 624
+46.9 shot v87-pin-bon
+47.3 shot v87-pin-unlock
+48.0 shot v87-pin-unlock2

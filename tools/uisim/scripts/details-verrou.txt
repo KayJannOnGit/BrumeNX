@@ -1,0 +1,29 @@
+# uisim v87 - the lock screen like the PS4: power-on (Brume's emblem), the prompt, who plays, the 3 presses (no code), the unlock
+0.05 demo batterie 64
+0.05 demo verrou 1
+0.10 demo taches
+0.45 shot v87-boot-1
+0.95 shot v87-boot-2
+1.6 shot v87-boot-3
+2.4 shot v87-boot-4
+4.6 shot v87-invite
+5.0 press A
+5.25 shot v87-qui-arrivee
+6.2 shot v87-qui
+6.5 press Right
+6.8 shot v87-qui-droite
+7.4 press A
+8.2 shot v87-appuis-0
+8.5 press A
+9.6 shot v87-appuis-1
+10.0 press A
+11.2 shot v87-appuis-2
+11.5 demo charge 1
+11.9 shot v87-charge-verrou
+12.4 press A
+12.55 shot v87-unlock-1
+12.8 shot v87-unlock-2
+13.3 shot v87-unlock-3
+16.5 shot v87-roue
+17.5 demo charge 0
+17.9 shot v87-debranche

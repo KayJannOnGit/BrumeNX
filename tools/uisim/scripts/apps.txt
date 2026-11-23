@@ -1,0 +1,6 @@
+# uisim - the Apps page with homebrews (quick check)
+0.5 press A
+1.0 press A
+1.5 press A
+7.0 press R
+9.0 shot apps-liste

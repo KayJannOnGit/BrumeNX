@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><title>Brume — cuisson de la roue</title>
+<!-- même police que la maquette (même lien) -->
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@100;200;300;500;600&display=swap" rel="stylesheet">
+<script type="importmap">{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
+<script src="/m1/logos/logos.js"></script>
+<style>body{background:#0b0d14;color:#cfd6f2;font:13px/1.4 monospace;margin:0}#log{white-space:pre;padding:10px;position:absolute;left:0;top:740px}
+#stage{position:relative;width:1280px;height:720px;overflow:hidden;background:#000}</style>
+<style id="mock"></style>
+</head><body><div id="stage"></div><div id="log">…</div>
+<script type="module">
+// Cuisson de la roue des consoles pour Brume, À PARTIR DE LA MAQUETTE (docs/M1/maquette-brume.html) :
+//  1. l'interface : le CSS et le HTML de la maquette sont posés tels quels à 1280x720, le navigateur fait la mise
+//     en page, on relève la position exacte de chaque élément et on dessine chacun en image (2 échelles : 720p, 1080p)
+//  2. les consoles : chargées et traitées avec le même code que la maquette (pièces cachées, couleurs ×0,78,
+//     matériaux opaques, centrage, taille 2, rotations), puis exportées en sommets + textures 512 px.
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+// meshoptimizer (MIT, outil du PC seulement) : alléger les consoles et ranger les triangles pour le cache du GPU
+import { MeshoptSimplifier } from 'https://cdn.jsdelivr.net/npm/meshoptimizer@0.21.0/meshopt_simplifier.module.js';
+import { MeshoptEncoder } from 'https://cdn.jsdelivr.net/npm/meshoptimizer@0.21.0/meshopt_encoder.module.js';
+await MeshoptSimplifier.ready; await MeshoptEncoder.ready; MeshoptSimplifier.useExperimentalFeatures=true;
+const log=t=>{ document.getElementById('log').textContent+='\n'+t; };
+const post=async(path,buf)=>{ const r=await fetch(path,{method:'POST',body:buf}); if(!r.ok) throw new Error(path); };
+const SRC=await (await fetch('/m1/maquette-brume.html')).text();
+const grab=re=>{ const m=SRC.match(re); if(!m) throw new Error('introuvable dans la maquette : '+re); return m[0]; };
+
+// ---------- 1. l'interface, mise en page par le navigateur ----------
+document.getElementById('mock').textContent=grab(/<style>[\s\S]*?<\/style>/).replace(/<\/?style>/g,'');
+const doc=new DOMParser().parseFromString(SRC,'text/html');
+const stage=document.getElementById('stage');
+const hud=document.createElement('div'); hud.id='hud'; hud.style.transform='none'; stage.appendChild(hud);
+hud.appendChild(document.importNode(doc.getElementById('wheel'),true));
+const $=id=>document.getElementById(id);
+// la maquette elle-même : ses consoles et sa fonction renderName (recopiées, pas réécrites)
+const CONSOLES=eval('('+grab(/const CONSOLES = (\[[\s\S]*?\n\]);/).replace(/^const CONSOLES = /,'').replace(/;$/,'')+')');
+const renderName=eval('('+grab(/function renderName\(i\)\{[\s\S]*?\n  \$\('ccount'\)\.textContent=c\.count; \}/)+')');
+document.querySelectorAll('#wheel .enter').forEach(e=>e.classList.remove('out-top','out-up','out-bottom'));
+$('yHint').style.display='';                                       // mesuré aussi (le cube doré, plus tard)
+await document.fonts.ready; await document.fonts.load('200 40px Outfit'); await document.fonts.load('300 18px Outfit');
+await document.fonts.load('600 12px Outfit'); await document.fonts.load('400 15px Outfit');
+await document.fonts.load('300 22px Outfit'); await document.fonts.load('400 18px Outfit'); await document.fonts.load('300 19px Outfit'); await document.fonts.load('600 13.5px Outfit');   // v28 : interface +25 %
+
+const R=el=>{ const r=el.getBoundingClientRect(), s=stage.getBoundingClientRect(); return [r.left-s.left,r.top-s.top,r.width,r.height]; };
+// un texte : on prend la boîte de son nœud texte (hauteur = zone de la police) ; ligne de base = haut + ascendante
+function textNode(el){ const w=document.createTreeWalker(el,NodeFilter.SHOW_TEXT); let n; while((n=w.nextNode())) if(n.textContent.trim()) return n; return null; }
+function fontOf(el){ const cs=getComputedStyle(el), fs=parseFloat(cs.fontSize);
+  return {cs,fs,weight:cs.fontWeight,ls:cs.letterSpacing==='normal'?0:parseFloat(cs.letterSpacing)}; }
+function textBox(el){ const n=textNode(el), rg=document.createRange(); rg.selectNodeContents(n); const r=rg.getBoundingClientRect(), s=stage.getBoundingClientRect();
+  const f=fontOf(n.parentElement), c=document.createElement('canvas').getContext('2d'); c.font=`${f.weight} ${f.fs}px Outfit`; c.letterSpacing=f.ls+'px';
+  const m=c.measureText('Hg'); return {x:r.left-s.left,y:r.top-s.top,w:r.width,h:r.height,asc:m.fontBoundingBoxAscent,f}; }
+const SPRITES=[];      // {name, group, paint(ctx, scale), x, y (menu px of the image top-left at scale 1), w, h}
+const PAD=14;          // marge autour des images (lueurs, ombres)
+function sprite(name,group,x,y,w,h,paint){ SPRITES.push({name,group,x:x-PAD,y:y-PAD,w:w+2*PAD,h:h+2*PAD,paint}); }
+// un texte tel que le CSS le dessine (police, graisse, taille, espacement, couleur, ombre)
+function textSprite(name,group,el,text){ const b=textBox(el), {cs,fs,weight,ls}=b.f;
+  sprite(name,group,b.x,b.y,b.w,b.h,(x,s)=>{ x.font=`${weight} ${fs*s}px Outfit`; x.letterSpacing=(ls*s)+'px'; x.fillStyle=cs.color;
+    if(cs.textShadow&&cs.textShadow!=='none'){ const t=cs.textShadow.match(/rgba?\([^)]*\)|#[0-9a-f]+/i), n=cs.textShadow.replace(/rgba?\([^)]*\)/,'').trim().split(/\s+/).map(parseFloat);
+      x.shadowColor=t?t[0]:'black'; x.shadowOffsetX=n[0]*s; x.shadowOffsetY=n[1]*s; x.shadowBlur=n[2]*s; }
+    x.fillText(text,PAD*s,(PAD+b.asc)*s); }); }
+const LAYOUT={ consoles:[] };
+// la barre du haut
+const top=$('topBar'); LAYOUT.topBar=R(top).concat([parseFloat(getComputedStyle(top).borderTopLeftRadius)]);
+{ const cube=top.querySelector('.cube'), r=R(cube); const cs=getComputedStyle(cube);
+  sprite('cube','top',r[0],r[1],r[2],r[3],(x,s)=>{ const w=parseFloat(cs.width), b=parseFloat(cs.borderTopWidth);
+    x.translate((PAD+r[2]/2)*s,(PAD+r[3]/2)*s); x.rotate(Math.PI/4); x.shadowColor='rgba(110,140,240,.6)'; x.shadowBlur=8*s;
+    x.strokeStyle=cs.borderTopColor; x.lineWidth=b*s; x.strokeRect((-w/2+b/2)*s,(-w/2+b/2)*s,(w-b)*s,(w-b)*s); }); }
+textSprite('who','top',$('who'),'Yass');
+top.querySelectorAll('.tab').forEach((t,i)=>{ const r=R(t), svg=t.querySelector('svg'), sr=R(svg), cs=getComputedStyle(t), on=t.classList.contains('on');
+  if(on) sprite('tabbg'+i,'top',r[0],r[1],r[2],r[3],(x,s)=>{ x.fillStyle=cs.backgroundColor; x.beginPath(); x.roundRect(PAD*s,PAD*s,r[2]*s,r[3]*s,r[3]/2*s); x.fill();
+    x.save(); x.clip(); x.strokeStyle='rgba(200,215,255,.12)'; x.lineWidth=2*s; x.beginPath(); x.roundRect(PAD*s,(PAD+1)*s,r[2]*s,r[3]*s,r[3]/2*s); x.stroke(); x.restore(); });
+  const icon=new Image(); const xml=new XMLSerializer().serializeToString(svg).replace('<svg ','<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="'+cs.color+'" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" ');
+  icon.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(xml); SPRITES.waits=(SPRITES.waits||[]).concat(icon.decode());
+  sprite('tab'+i,'top',sr[0],sr[1],sr[2],sr[3],(x,s)=>x.drawImage(icon,PAD*s,PAD*s,sr[2]*s,sr[3]*s));
+  const lbl=t.querySelector('.lbl'); if(on) textSprite('tablbl'+i,'top',lbl,lbl.textContent);
+  // les onglets vivants (menu natif) : chaque icône en couleur éteinte (.tab #8c95b8) et allumée (.tab.on #e4e9ff),
+  // groupe « tabs » ; le menu place lui-même la pastille, l'icône et le libellé selon l'onglet choisi (même CSS)
+  for(const [nm,col] of [['tabicon','#8c95b8'],['tabon','#e4e9ff']]){
+    const im=new Image(), x2=new XMLSerializer().serializeToString(svg).replace('<svg ','<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="'+col+'" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" ');
+    im.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(x2); SPRITES.waits=(SPRITES.waits||[]).concat(im.decode());
+    sprite(nm+i,'tabs',0,0,sr[2],sr[3],(x,s)=>x.drawImage(im,PAD*s,PAD*s,sr[2]*s,sr[3]*s)); } });   // v28 : la taille du CSS (25 px)
+// v28 — les icônes des cartes des pages (L / R) : Musique, Album, Manettes (#pages .pcard svg), Réglages (l'icône de son onglet), 64 px
+{ const cards=[...doc.querySelectorAll('#pages .pcard svg')], tsv=[...top.querySelectorAll('.tab svg')];
+  [cards[0],cards[1],cards[2],tsv[4]].forEach((svg,k)=>{ if(!svg) return;
+    const im=new Image(), x2=new XMLSerializer().serializeToString(svg).replace('<svg ','<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="#cdd6f6" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" ');
+    im.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(x2); SPRITES.waits=(SPRITES.waits||[]).concat(im.decode());
+    sprite('page'+(k+1),'pages',0,0,64,64,(x,s)=>{ x.filter=`drop-shadow(0 0 ${14*s}px rgba(110,140,240,.35))`; x.drawImage(im,PAD*s,PAD*s,64*s,64*s); x.filter='none'; }); }); }
+{ const tt=$('topTime'); tt.textContent='sam. 15 novembre · 21:24'; const r=R(tt), b=textBox(tt); LAYOUT.time={ right:r[0]+r[2], baseline:b.y+b.asc, color:b.f.cs.color, size:b.f.fs, ls:b.f.ls, weight:b.f.weight }; }
+// le bandeau du nom : une version par console (renderName de la maquette)
+const plate=$('namePlate');
+CONSOLES.forEach((c,i)=>{ renderName(i); const r=R(plate), e={ plate:r.concat([parseFloat(getComputedStyle(plate).borderTopLeftRadius)]) };
+  const lg=$('clogo').firstElementChild;
+  if(lg&&$('clogo').style.display!=='none'){ const lr=R(lg), L=LOGOS[c.key], img=new Image(); img.src=L.src; SPRITES.waits.push(img.decode());
+    const col=L.mode==='orig'?null:(L.mode==='white'?'#e3e8fb':'#6f7bd0');
+    sprite('logo'+i,'name'+i,lr[0],lr[1],lr[2],lr[3],(x,s)=>{ let src=img;
+      if(col){ const o=document.createElement('canvas'); o.width=Math.ceil(lr[2]*s); o.height=Math.ceil(lr[3]*s); const ox=o.getContext('2d');
+        // mask-size:contain + mask-position:center
+        const k=Math.min(lr[2]/img.width,lr[3]/img.height), w=img.width*k, h=img.height*k;
+        ox.drawImage(img,(lr[2]-w)/2*s,(lr[3]-h)/2*s,w*s,h*s); ox.globalCompositeOperation='source-in'; ox.fillStyle=col; ox.fillRect(0,0,o.width,o.height); src=o; }
+      x.filter=`drop-shadow(0 0 ${10*s}px rgba(110,140,240,.25))`; x.drawImage(src,PAD*s,PAD*s,lr[2]*s,lr[3]*s); x.filter='none'; }); }
+  if(getComputedStyle($('cname')).display!=='none') textSprite('name'+i,'name'+i,$('cname'),c.name);
+  textSprite('count'+i,'name'+i,$('ccount'),$('ccount').innerText);
+  LAYOUT.consoles.push(e); });
+// les aides des touches (gauche : actions, droite : navigation)
+function btnSprite(name,group,el,label){ const r=R(el), cs=getComputedStyle(el);
+  sprite(name,group,r[0],r[1],r[2],r[3],(x,s)=>{ const b=parseFloat(cs.borderTopWidth), rad=Math.min(parseFloat(cs.borderTopLeftRadius),r[3]/2);
+    x.strokeStyle=cs.borderTopColor; x.lineWidth=b*s; x.beginPath(); x.roundRect((PAD+b/2)*s,(PAD+b/2)*s,(r[2]-b)*s,(r[3]-b)*s,(rad-b/2)*s); x.stroke();
+    x.font=`${cs.fontWeight} ${parseFloat(cs.fontSize)*s}px Outfit`; x.fillStyle=cs.color; x.textAlign='center'; x.textBaseline='middle';
+    x.fillText(label,(PAD+r[2]/2)*s,(PAD+r[3]/2)*s); }); }
+[['bottom','hintsL'],['bottomR','hintsR']].forEach(([id,g])=>{ $(id).querySelectorAll(':scope > span').forEach((sp,k)=>{ const b=sp.querySelector('.btn-g');
+  btnSprite(g+'btn'+k,g+(sp.id==='yHint'?'Y':''),b,b.textContent);
+  const lbl=[...sp.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join('').trim();
+  const holder=document.createElement('span'); holder.textContent=lbl; [...sp.childNodes].filter(n=>n.nodeType===3).forEach(n=>n.remove()); sp.appendChild(holder);
+  textSprite(g+'lbl'+k,g+(sp.id==='yHint'?'Y':''),holder,lbl); }); });
+// v28 — les pastilles des aides (pour les pages et les réglages du menu natif) : mêmes styles que .hints .btn-g
+{ const box=document.createElement('div'); box.className='hints left'; $('wheel').appendChild(box);
+  const CHIPS=[['chipA','A',0],['chipB','B',0],['chipY','Y',0],['chipLR','L R',1],['chipLeRi','◀ ▶',1],['chipUpDo','▲ ▼',1]];
+  for(const [nm,lbl,pill] of CHIPS){ const sp=document.createElement('span'), b=document.createElement('span'); b.className='btn-g'; b.textContent=lbl;
+    if(pill) b.style.cssText='width:auto;padding:0 8px;border-radius:14px'; sp.appendChild(b); box.appendChild(sp); btnSprite(nm,'chips',b,lbl); } }
+// v28 — les icônes des réglages (maquette v26-v27) : la forme (rouge) et le liseré de lumière intérieur (vert), 56 px,
+// pour le verre du menu natif (ui_fsh mode 22). Le code des icônes est repris tel quel de la maquette.
+const ICO=eval('(()=>{'+SRC.slice(SRC.indexOf('const Pc=('),SRC.indexOf('\n',SRC.indexOf('Object.assign(ICO,{user:ICO.comptes')))+'; return ICO; })()');
+window.ICO3D=ICO;
+{ const IS=56, P=3;
+  const svgOf=(key,edge)=>{ const ic=ICO[key], f=[].concat(ic.f||[]);
+    const body=f.map(d=>`<path fill-rule='evenodd' d='${d}'/>`).join('')+(ic.s?`<path d='${ic.s}' fill='none' stroke='#000' stroke-width='${ic.w||2}' stroke-linecap='round' stroke-linejoin='round'/>`:'');
+    const head=`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='96' height='96'>`;
+    return head+(edge?`<filter id='e' x='-20%' y='-20%' width='140%' height='140%'><feMorphology in='SourceAlpha' operator='erode' radius='.8' result='i'/><feComposite in='SourceAlpha' in2='i' operator='out'/><feGaussianBlur stdDeviation='.35'/></filter><g filter='url(#e)'>`+body+'</g>':body)+'</svg>'; };
+  for(const key of Object.keys(ICO)){
+    const a=new Image(), b=new Image();
+    a.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svgOf(key,false)); b.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svgOf(key,true));
+    SPRITES.waits=(SPRITES.waits||[]).concat(a.decode(),b.decode());
+    const tint=(img,col,s)=>{ const o=document.createElement('canvas'); o.width=o.height=Math.ceil(IS*s); const ox=o.getContext('2d');
+      ox.drawImage(img,0,0,IS*s,IS*s); ox.globalCompositeOperation='source-in'; ox.fillStyle=col; ox.fillRect(0,0,o.width,o.height); return o; };
+    SPRITES.push({name:'ico_'+key,group:'icons',x:-P,y:-P,w:IS+2*P,h:IS+2*P,paint:(x,s)=>{
+      x.globalCompositeOperation='lighter'; x.drawImage(tint(a,'#f00',s),P*s,P*s); x.drawImage(tint(b,'#0f0',s),P*s,P*s); x.globalCompositeOperation='source-over'; }}); } }
+for(const [id,cls] of [['topBar','out-top'],['namePlate','out-up'],['bottom','out-bottom'],['bottomR','out-bottom']]) LAYOUT[id+'Class']=cls;
+await Promise.all(SPRITES.waits);
+log('interface : '+SPRITES.length+' images mesurées');
+
+// atlas : même rangement aux 2 échelles
+function pack(scale){ let x=0,y=0,rowH=0; const W=scale>1?2048:1536, out=[];
+  for(const s of SPRITES){ const w=Math.ceil(s.w*scale)+2, h=Math.ceil(s.h*scale)+2; if(x+w>W){ x=0; y+=rowH; rowH=0; } out.push([x+1,y+1,w-2,h-2]); x+=w; rowH=Math.max(rowH,h); }
+  const H=y+rowH, cv=document.createElement('canvas'); cv.width=W; cv.height=H; const g=cv.getContext('2d');
+  SPRITES.forEach((s,i)=>{ const [ax,ay]=out[i]; g.save(); g.beginPath(); g.rect(ax,ay,out[i][2],out[i][3]); g.clip(); g.translate(ax,ay); s.paint(g,scale); g.restore(); });
+  return {W,H,rects:out,px:g.getImageData(0,0,W,H).data}; }
+const A=[pack(1),pack(1.5)];
+// v73 — l'ÉPAISSEUR des icônes des réglages : la distance signée au bord, dans le bleu (vide jusqu'ici), pour le verre
+// liquide façon PS3 (ui_fsh mode 29). b = 0,5 − d/16, d en px du dessin 1x (< 0 dedans, ±8 px). Même calcul que
+// tools/ui_sdf.py (qui sait aussi l'ajouter à un ui.bin déjà cuit) : couverture rouge×alpha agrandie ×4, coupée à 0,5,
+// transformée de distance exacte dedans et dehors (Felzenszwalb et Huttenlocher, écrite par nous), moyennée par pixel.
+function sdfIcons(atlases){ const INF=1e20;
+  const edt1=(f,n)=>{ const d=new Float64Array(n), v=new Int32Array(n), z=new Float64Array(n+1); let k=0; v[0]=0; z[0]=-INF; z[1]=INF;
+    for(let q=1;q<n;q++){ for(;;){ const p=v[k], s=((f[q]+q*q)-(f[p]+p*p))/(2*q-2*p);
+        if(s<=z[k]&&k>0){ k--; continue; } if(s<=z[k]){ v[0]=q; z[0]=-INF; z[1]=INF; break; } k++; v[k]=q; z[k]=s; z[k+1]=INF; break; } }
+    k=0; for(let q=0;q<n;q++){ while(z[k+1]<q) k++; const p=v[k]; d[q]=(q-p)*(q-p)+f[p]; } return d; };
+  const edt=(mask,w,h)=>{ const f=new Float64Array(w*h), row=new Float64Array(Math.max(w,h));
+    for(let i=0;i<w*h;i++) f[i]=mask[i]?0:INF;
+    for(let y=0;y<h;y++){ for(let x=0;x<w;x++) row[x]=f[y*w+x]; const r=edt1(row,w); for(let x=0;x<w;x++) f[y*w+x]=r[x]; }
+    for(let x=0;x<w;x++){ for(let y=0;y<h;y++) row[y]=f[y*w+x]; const r=edt1(row,h); for(let y=0;y<h;y++) f[y*w+x]=Math.sqrt(r[y]); }
+    return f; };
+  atlases.forEach((a,ai)=>{ const scale=ai?1.5:1, U=4;
+    SPRITES.forEach((s,si)=>{ if(!s.name.startsWith('ico_')) return; const [x0,y0,w,h]=a.rects[si]; if(!w||!h) return;
+      const cov=new Float64Array(w*h); for(let y=0;y<h;y++) for(let x=0;x<w;x++){ const i=((y0+y)*a.W+x0+x)*4; cov[y*w+x]=a.px[i]*a.px[i+3]/65025; }
+      const W4=w*U, H4=h*U, ins=new Uint8Array(W4*H4), out=new Uint8Array(W4*H4); let any=false;
+      for(let Y=0;Y<H4;Y++){ const sy=(Y+.5)/U-.5, fy0=Math.floor(sy), fy=Math.min(1,Math.max(0,sy-fy0)), ya=Math.min(h-1,Math.max(0,fy0)), yb=Math.min(h-1,Math.max(0,fy0+1));
+        for(let X=0;X<W4;X++){ const sx=(X+.5)/U-.5, fx0=Math.floor(sx), fx=Math.min(1,Math.max(0,sx-fx0)), xa=Math.min(w-1,Math.max(0,fx0)), xb=Math.min(w-1,Math.max(0,fx0+1));
+          const c=(cov[ya*w+xa]*(1-fx)+cov[ya*w+xb]*fx)*(1-fy)+(cov[yb*w+xa]*(1-fx)+cov[yb*w+xb]*fx)*fy;
+          const k=Y*W4+X; ins[k]=c>=.5?1:0; out[k]=1-ins[k]; if(ins[k]) any=true; } }
+      const dO=any?edt(ins,W4,H4):null, dI=any?edt(out,W4,H4):null;
+      for(let y=0;y<h;y++) for(let x=0;x<w;x++){ let sum=0;
+        for(let j=0;j<U;j++) for(let i=0;i<U;i++){ const k=(y*U+j)*W4+x*U+i; sum+=any?(ins[k]?-(dI[k]-.5):dO[k]-.5):8*scale*U; }
+        const d=sum/(U*U)/U/scale; a.px[((y0+y)*a.W+x0+x)*4+2]=Math.max(0,Math.min(255,Math.round((.5-d/16)*255))); } }); }); }
+sdfIcons(A);
+// fichier binaire : 'BUIA', nb images, pour chaque : nom[24], groupe[12], x,y,w,h (menu px), puis 2 atlas (w,h, rects, RGBA)
+{ const enc=new TextEncoder(); let size=8+SPRITES.length*(24+12+16)+A.reduce((n,a)=>n+8+SPRITES.length*16+a.W*a.H*4,0);
+  const buf=new ArrayBuffer(size), v=new DataView(buf), u8=new Uint8Array(buf); let o=0;
+  const str=(t,n)=>{ u8.set(enc.encode(t).slice(0,n-1),o); o+=n; };
+  str('BUIA',4); v.setUint32(o,SPRITES.length,true); o+=4;
+  for(const s of SPRITES){ str(s.name,24); str(s.group,12); for(const k of [s.x,s.y,s.w,s.h]){ v.setFloat32(o,k,true); o+=4; } }
+  for(const a of A){ v.setUint32(o,a.W,true); v.setUint32(o+4,a.H,true); o+=8; for(const r of a.rects) for(const k of r){ v.setUint32(o,k,true); o+=4; }
+    u8.set(a.px,o); o+=a.px.length; }
+  await post('/asset/ui/ui.bin',buf); log(`atlas ui : ${A[0].W}x${A[0].H} et ${A[1].W}x${A[1].H} → ${(size/1048576).toFixed(2)} Mo`); }
+await post('/asset/ui/layout.json',new TextEncoder().encode(JSON.stringify(LAYOUT,null,1)));
+log('layout.json : barre, horloge, '+LAYOUT.consoles.length+' bandeaux');
+
+// ---------- 2. les consoles (même traitement que loadRealConsoles() dans la maquette) ----------
+eval(grab(/const MODEL_SIZE=[^\n]*/).replace('const ','window.')); eval(grab(/const MODEL_FIX=[^\n]*/).replace('const ','window.'));
+eval(grab(/const MODEL_HIDE=[^\n]*/).replace('const ','window.')); eval(grab(/const HIDE_ALL=[^\n]*/).replace('const ','window.'));
+const TEX=512, TRI_MAX=9000, TRI_LOW=2500;   // triangles max par console (mesuré : 49 000 au total = 2 ms, 60 FPS avec 5 ms de marge)
+// BC1 (DXT1) : 8 octets par bloc de 4x4. Extrémités = les 2 pixels aux bouts de l'axe principal du bloc,
+// puis chaque pixel prend la plus proche des 4 couleurs de la palette (mode 4 couleurs : c0 > c1).
+function bc1(px,w,h){ const out=new Uint8Array((w/4)*(h/4)*8), v=new DataView(out.buffer); let o=0;
+  const q=(r,g,b)=>((Math.round(r*31/255)<<11)|(Math.round(g*63/255)<<5)|Math.round(b*31/255));
+  const dq=c=>[((c>>11)&31)*255/31,((c>>5)&63)*255/63,(c&31)*255/31];
+  for(let by=0;by<h;by+=4) for(let bx=0;bx<w;bx+=4){ const P=[];
+    for(let y=0;y<4;y++) for(let x=0;x<4;x++){ const i=((by+y)*w+bx+x)*4; P.push([px[i],px[i+1],px[i+2]]); }
+    const mn=[255,255,255], mx=[0,0,0]; for(const c of P) for(let k=0;k<3;k++){ mn[k]=Math.min(mn[k],c[k]); mx[k]=Math.max(mx[k],c[k]); }
+    const ax=[mx[0]-mn[0],mx[1]-mn[1],mx[2]-mn[2]]; let lo=P[0], hi=P[0], plo=1e9, phi=-1e9;
+    for(const c of P){ const d=c[0]*ax[0]+c[1]*ax[1]+c[2]*ax[2]; if(d<plo){ plo=d; lo=c; } if(d>phi){ phi=d; hi=c; } }
+    let c0=q(...hi), c1=q(...lo); if(c0<c1){ const t=c0; c0=c1; c1=t; }
+    let idx=0;
+    if(c0!==c1){ const e0=dq(c0), e1=dq(c1), pal=[e0,e1,e0.map((a,k)=>(2*a+e1[k])/3),e0.map((a,k)=>(a+2*e1[k])/3)];
+      P.forEach((c,i)=>{ let best=0, bd=1e9; pal.forEach((p,j)=>{ const d=(c[0]-p[0])**2+(c[1]-p[1])**2+(c[2]-p[2])**2; if(d<bd){ bd=d; best=j; } }); idx|=best<<(2*i); }); }
+    v.setUint16(o,c0,true); v.setUint16(o+2,c1,true); v.setUint32(o+4,idx>>>0,true); o+=8; }
+  return out; }
+function exportModel(name,wrap){ wrap.updateMatrixWorld(true); const parts=[], texes=[], texIdx=new Map();
+  const texOf=map=>{ if(!map||!map.image) return -1; if(texIdx.has(map.image)) return texIdx.get(map.image);
+    const im=map.image, k=Math.min(1,TEX/Math.max(im.width,im.height)), w=Math.max(4,Math.round(im.width*k/4)*4), h=Math.max(4,Math.round(im.height*k/4)*4);
+    const cv=document.createElement('canvas'); cv.width=w; cv.height=h; const g=cv.getContext('2d'); g.drawImage(im,0,0,w,h);
+    // mipmaps (reduced copies, down to 4 px): the console reads a small one for a small console, fast and without shimmer
+    const pow2=x=>(x&(x-1))===0, lv=[bc1(g.getImageData(0,0,w,h).data,w,h)]; let src=cv, lw=w, lh=h;
+    while(pow2(w)&&pow2(h)&&lw>=8&&lh>=8){ lw>>=1; lh>>=1; const c2=document.createElement('canvas'); c2.width=lw; c2.height=lh;
+      const g2=c2.getContext('2d'); g2.imageSmoothingQuality='high'; g2.drawImage(src,0,0,lw,lh); lv.push(bc1(g2.getImageData(0,0,lw,lh).data,lw,lh)); src=c2; }
+    const px=new Uint8Array(lv.reduce((s,a)=>s+a.length,0)); let po=0; for(const a of lv){ px.set(a,po); po+=a.length; }
+    texes.push({w,h,levels:lv.length,px}); texIdx.set(map.image,texes.length-1); return texes.length-1; };
+  const avg=(map,ch)=>{ if(!map||!map.image) return 1; const cv=document.createElement('canvas'); cv.width=cv.height=16; const g=cv.getContext('2d'); g.drawImage(map.image,0,0,16,16);
+    const d=g.getImageData(0,0,16,16).data; let s=0; for(let i=0;i<256;i++) s+=d[i*4+ch]; return s/256/255; };
+  wrap.traverse(o=>{ if(!o.isMesh||!o.visible) return; const geo=o.geometry, mats=Array.isArray(o.material)?o.material:[o.material];
+    const pos=geo.attributes.position, nrm=geo.attributes.normal, uv=geo.attributes.uv; if(!pos) return;
+    const nm=new THREE.Matrix3().getNormalMatrix(o.matrixWorld), p=new THREE.Vector3(), n=new THREE.Vector3();
+    const V=new Float32Array(pos.count*8);
+    for(let i=0;i<pos.count;i++){ p.fromBufferAttribute(pos,i).applyMatrix4(o.matrixWorld); if(nrm) n.fromBufferAttribute(nrm,i).applyMatrix3(nm).normalize(); else n.set(0,1,0);
+      V.set([p.x,p.y,p.z,n.x,n.y,n.z,uv?uv.getX(i):0,uv?uv.getY(i):0],i*8); }
+    const idx=geo.index?geo.index.array:Uint32Array.from({length:pos.count},(_,i)=>i);
+    const groups=(geo.groups.length&&Array.isArray(o.material))?geo.groups:[{start:0,count:idx.length,materialIndex:0}];   // one material = one part
+    for(const gr of groups){ const m=Array.isArray(o.material)?mats[gr.materialIndex||0]:o.material; if(!m) continue;
+      const I=Uint32Array.from(idx.slice(gr.start,gr.start+gr.count));
+      const glass=(m.transmission||0)>0||(m.transparent&&m.opacity<1);
+      parts.push({V,I,tex:uv?texOf(m.map):-1,col:[m.color.r,m.color.g,m.color.b,m.opacity??1],metal:(m.metalness??0)*avg(m.metalnessMap,2),
+        rough:(m.roughness??1)*avg(m.roughnessMap,1),env:m.envMapIntensity??1,glass,tint:m.attenuationColor?[m.attenuationColor.r,m.attenuationColor.g,m.attenuationColor.b]:[1,1,1],
+        emi:m.emissive?[m.emissive.r*(m.emissiveIntensity??1),m.emissive.g*(m.emissiveIntensity??1),m.emissive.b*(m.emissiveIntensity??1)]:[0,0,0],
+        dbl:m.side===THREE.DoubleSide,clearcoat:m.clearcoat||0,emiTex:uv?texOf(m.emissiveMap):-1}); } });
+  // 'BMDL' v1 : textures (BC1 sRGB, (w/4)*(h/4)*8 octets) puis parties (sommets pos3 nrm3 uv2, indices u32, matériau)
+  // Tegra X1 : 113 000 triangles au total coûtaient ~7 ms par image (mesuré sur la console). Chaque console vise
+  // TRI_MAX triangles (erreur max 1 % de sa taille), puis les sommets inutiles partent et l'ordre suit le cache du GPU.
+  const triIn=parts.reduce((n,q)=>n+q.I.length/3,0), keep=Math.min(1,TRI_MAX/triIn);
+  for(const q of parts){
+    let I=q.I;
+    { // souder les sommets identiques (position, normale, uv) : sinon les triangles restent séparés et rien ne s'allège
+      const key=new Map(), R=(x,k)=>Math.round(x*k), W=new Uint32Array(I.length);
+      for(let i=0;i<I.length;i++){ const o=I[i]*8, v=q.V;
+        const kk=R(v[o],1e5)+','+R(v[o+1],1e5)+','+R(v[o+2],1e5)+','+R(v[o+3],500)+','+R(v[o+4],500)+','+R(v[o+5],500)+','+R(v[o+6],1e4)+','+R(v[o+7],1e4);
+        let r=key.get(kk); if(r===undefined){ r=I[i]; key.set(kk,r); } W[i]=r; }
+      I=W; }
+    if(keep<1&&I.length>=300){
+      const nv=q.V.length/8, P=new Float32Array(nv*3); for(let i=0;i<nv;i++){ P[i*3]=q.V[i*8]; P[i*3+1]=q.V[i*8+1]; P[i*3+2]=q.V[i*8+2]; }
+      const target=Math.max(3,Math.floor(I.length/3*keep)*3);
+      // les normales comptent aussi : une face plate reste plate (sans ça, l'avant de la PSP et de la GBA ondulait)
+      const Nn=new Float32Array(nv*3); for(let i=0;i<nv;i++){ Nn[i*3]=q.V[i*8+3]; Nn[i*3+1]=q.V[i*8+4]; Nn[i*3+2]=q.V[i*8+5]; }
+      const simp=e=>MeshoptSimplifier.simplifyWithAttributes?MeshoptSimplifier.simplifyWithAttributes(Uint32Array.from(I),P,3,Nn,3,[.6,.6,.6],null,target,e)[0]
+                                                             :MeshoptSimplifier.simplify(Uint32Array.from(I),P,3,target,e)[0];
+      for(const e of [.005,.01,.02]){ const r=simp(e); if(r.length<=target*1.3||e===.02){ I=r; break; } }   // erreur 0,5 %, plus si besoin
+    }
+    const used=new Map(), I2=new Uint32Array(I.length); let k=0;
+    for(let i=0;i<I.length;i++){ let r=used.get(I[i]); if(r===undefined){ r=k++; used.set(I[i],r); } I2[i]=r; }
+    const V2=new Float32Array(k*8); for(const [o,r] of used) V2.set(q.V.subarray(o*8,o*8+8),r*8);
+    const [remap,unique]=MeshoptEncoder.reorderMesh(I2,true,false);   // I2 réécrit sur place
+    const V3=new Float32Array(unique*8); for(let i=0;i<k;i++) if(remap[i]!==0xffffffff) V3.set(V2.subarray(i*8,i*8+8),remap[i]*8);
+    q.V=V3; q.I=I2;
+  }
+  // Niveau de détail léger (LOD 1) pour les consoles du fond, petites à l'écran (mesuré sur la console : 80 000 triangles
+  // = 6 ms/image, 56-59 FPS). Mêmes sommets, autres indices : allégé depuis le LOD 0, normales respectées.
+  const triOut=parts.reduce((n,q)=>n+q.I.length/3,0), keepLow=Math.min(1,TRI_LOW/triOut);
+  for(const q of parts){
+    q.I1=q.I;
+    if(keepLow<1&&q.I.length>=60){
+      const nv=q.V.length/8, P=new Float32Array(nv*3), Nn=new Float32Array(nv*3);
+      for(let i=0;i<nv;i++){ P[i*3]=q.V[i*8]; P[i*3+1]=q.V[i*8+1]; P[i*3+2]=q.V[i*8+2]; Nn[i*3]=q.V[i*8+3]; Nn[i*3+1]=q.V[i*8+4]; Nn[i*3+2]=q.V[i*8+5]; }
+      const target=Math.max(3,Math.floor(q.I.length/3*keepLow)*3);
+      // de loin, une erreur de quelques % de la taille de la console ne se voit pas : on desserre jusqu'à atteindre la cible
+      const simp=e=>MeshoptSimplifier.simplifyWithAttributes?MeshoptSimplifier.simplifyWithAttributes(Uint32Array.from(q.I),P,3,Nn,3,[.15,.15,.15],null,target,e)[0]
+                                                             :MeshoptSimplifier.simplify(Uint32Array.from(q.I),P,3,target,e)[0];
+      for(const e of [.02,.04,.08,.15]){ const r=simp(e); if(r.length<=target*1.3||e===.15){ if(r.length>=3) q.I1=r; break; } }
+    }
+  }
+  const triLow=parts.reduce((n,q)=>n+q.I1.length/3,0);
+  log(name+' : '+Math.round(triIn)+' → '+Math.round(triOut)+' triangles (LOD 0), '+Math.round(triLow)+' (LOD 1)');
+  let size=12; texes.forEach(t=>size+=12+t.px.length); parts.forEach(q=>size+=16+4*18+q.V.length*4+q.I.length*4+q.I1.length*4);
+  const buf=new ArrayBuffer(size), v=new DataView(buf), u8=new Uint8Array(buf); let o=0;
+  // 'BMD3' : comme 'BMD2' (chaque texture = w, h, niveaux (mipmaps), puis les niveaux BC1 à la suite), et chaque partie
+  // a en plus un 2e jeu d'indices (LOD 1) : u32 sommets, indices LOD 0, i32 texture, u32 indices LOD 1
+  u8.set([66,77,68,51],0); v.setUint32(4,texes.length,true); v.setUint32(8,parts.length,true); o=12;
+  for(const t of texes){ v.setUint32(o,t.w,true); v.setUint32(o+4,t.h,true); v.setUint32(o+8,t.levels,true); o+=12; u8.set(t.px,o); o+=t.px.length; }
+  let tris=0;
+  for(const q of parts){ v.setUint32(o,q.V.length/8,true); v.setUint32(o+4,q.I.length,true); v.setInt32(o+8,q.tex,true); v.setUint32(o+12,q.I1.length,true); o+=16;
+    const f=[...q.col,q.metal,q.rough,q.env,q.glass?1:0,...q.tint,...q.emi,q.dbl?1:0,q.clearcoat,q.emiTex,0];   // emissive = emi x emissiveMap
+    for(const k of f){ v.setFloat32(o,k,true); o+=4; }
+    new Float32Array(buf,o,q.V.length).set(q.V); o+=q.V.length*4; new Uint32Array(buf,o,q.I.length).set(q.I); o+=q.I.length*4;
+    new Uint32Array(buf,o,q.I1.length).set(q.I1); o+=q.I1.length*4; tris+=q.I.length/3; }
+  return {buf,info:`${name} : ${parts.length} parties, ${tris} triangles, ${texes.length} textures → ${(size/1048576).toFixed(2)} Mo`}; }
+const loader=new GLTFLoader();
+for(const c of CONSOLES){ const k=c.key;
+  let wrap;
+  if(k){ const bin=await (await fetch('/m1/modeles-legers/'+k+'.glb')).arrayBuffer(); const gltf=await loader.parseAsync(bin,'');
+    // --- recopié de loadRealConsoles() ---
+    const root=gltf.scene; const drop=[];
+    root.traverse(o=>{ if(o.isMesh&&(HIDE_ALL.test(o.name)||(MODEL_HIDE[k]&&MODEL_HIDE[k].test(o.name)))) drop.push(o); });
+    drop.forEach(o=>o.parent.remove(o));
+    root.traverse(o=>{ if(!o.isMesh) return; const geo=o.geometry;
+      for(const n of Object.keys(geo.attributes)) if(!geo.attributes[n]||!geo.attributes[n].array) geo.deleteAttribute(n);
+      if(!geo.attributes.position){ o.visible=false; return; }
+      const hasUV=!!geo.attributes.uv;
+      (Array.isArray(o.material)?o.material:[o.material]).forEach(m=>{
+        if(!hasUV) ['map','normalMap','roughnessMap','metalnessMap','emissiveMap','aoMap'].forEach(t=>{ if(m[t]) m[t]=null; });
+        if(!/glass|screen/i.test(m.name||'')){ m.transparent=false; m.opacity=1; m.depthWrite=true; m.alphaTest=Math.max(m.alphaTest||0,.5); }
+        m.envMapIntensity=.35; if(m.color) m.color.multiplyScalar(.78); m.needsUpdate=true; }); });
+    const box=new THREE.Box3().setFromObject(root), size=box.getSize(new THREE.Vector3()), ctr=box.getCenter(new THREE.Vector3());
+    root.position.sub(ctr);
+    wrap=new THREE.Group(); wrap.add(root); wrap.scale.setScalar(MODEL_SIZE/Math.max(size.x,size.y,size.z));
+    const fx=MODEL_FIX[k]||{}; wrap.rotation.set(fx.x||0,fx.y||0,fx.z||0);
+  } else {   // « Ports natifs » : les 3 cartes de verre de la maquette (glassMaterial(tint,{thickness:.3,attenuationDistance:.8,iridescence:.3}))
+    wrap=new THREE.Group();
+    [0,1,2].forEach(i=>{ const m=new THREE.MeshPhysicalMaterial({color:new THREE.Color('#d6def5'),metalness:0,roughness:.07,transmission:1,thickness:.3,ior:1.45,
+      attenuationColor:new THREE.Color(c.tint),attenuationDistance:.8,clearcoat:1,clearcoatRoughness:.05,iridescence:.3,iridescenceIOR:1.3,specularIntensity:.8,envMapIntensity:.55});
+      const card=new THREE.Mesh(new RoundedBoxGeometry(1.15,1.55,.08,4,.06),m); card.position.set((i-1)*.18,(i-1)*.05,(i-1)*-.12); card.rotation.z=(i-1)*.12; wrap.add(card); });
+  }
+  const {buf,info}=exportModel(k||'ports',wrap); await post('/asset/models/'+(k||'ports')+'.bmdl',buf); log(info); }
+
+// ---------- 3. la lumière d'ambiance des consoles : la « pièce » de la maquette (PMREM de RoomEnvironment, flou .04) ----------
+// rejouée par three.js lui-même (textureCubeUV) en 6 niveaux de flou (rugosité 0 → 1), carte 64x32 (longitude/latitude)
+{ const renderer=new THREE.WebGLRenderer(), pmrem=new THREE.PMREMGenerator(renderer);
+  const envTex=pmrem.fromScene(new RoomEnvironment(renderer),.04).texture, H=envTex.image.height, maxMip=Math.log2(H)-2;
+  const W=64, HH=32, LEV=[0,.2,.4,.6,.8,1];
+  const mat=new THREE.ShaderMaterial({ defines:{ ENVMAP_TYPE_CUBE_UV:'', CUBEUV_TEXEL_WIDTH:(1/(3*Math.max(Math.pow(2,maxMip),7*16))).toFixed(10),
+      CUBEUV_TEXEL_HEIGHT:(1/H).toFixed(10), CUBEUV_MAX_MIP:maxMip.toFixed(1) },
+    uniforms:{ envMap:{value:envTex}, rough:{value:0} },
+    vertexShader:`varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.0,1.0); }`,
+    fragmentShader:`#include <common>
+      uniform sampler2D envMap; uniform float rough; varying vec2 vUv;
+      #include <cube_uv_reflection_fragment>
+      void main(){ float ph=(vUv.x-0.5)*2.0*PI, th=(vUv.y-0.5)*PI; vec3 d=vec3(cos(th)*cos(ph), sin(th), cos(th)*sin(ph));
+        gl_FragColor=vec4(textureCubeUV(envMap,d,rough).rgb,1.0); }` });
+  const sc=new THREE.Scene(), cam=new THREE.Camera(); sc.add(new THREE.Mesh(new THREE.PlaneGeometry(2,2),mat));
+  const rt=new THREE.WebGLRenderTarget(W,HH,{type:THREE.FloatType}), all=new Float32Array(W*HH*4*LEV.length);
+  LEV.forEach((r,i)=>{ mat.uniforms.rough.value=r; renderer.setRenderTarget(rt); renderer.render(sc,cam);
+    const a=new Float32Array(W*HH*4); renderer.readRenderTargetPixels(rt,0,0,W,HH,a); all.set(a,i*W*HH*4); });
+  const buf=new ArrayBuffer(16+all.byteLength), v=new DataView(buf); new Uint8Array(buf).set([66,69,78,86]);
+  v.setUint32(4,W,true); v.setUint32(8,HH,true); v.setUint32(12,LEV.length,true); new Float32Array(buf,16).set(all);
+  let mx=0, sum=0; for(let i=0;i<W*HH;i++){ const k=(5*W*HH+i)*4; sum+=all[k+1]; } for(const x of all) mx=Math.max(mx,x);
+  await post('/asset/models/env.bin',buf); log(`environnement : ${LEV.length} niveaux ${W}x${HH}, max ${mx.toFixed(2)}, moyenne (rugosité 1) ${(sum/(W*HH)).toFixed(3)}`); }
+// v28 — les icônes 3D des 10 catégories (carrousel des réglages, maquette v27) : extrudées comme dans la maquette (galets
+// de verre arrondis ; un peu moins de segments pour la mémoire), normales lissées, centrées, Y vers le haut, taille .056.
+// 'BICN', n, puis pour chaque : u32 sommets, u32 indices ; sommets (pos, normale, uv 0 : comme les consoles) ; indices u32.
+{ const { SVGLoader } = await import('three/addons/loaders/SVGLoader.js');
+  const { mergeVertices } = await import('three/addons/utils/BufferGeometryUtils.js');
+  const ICO=window.ICO3D, loader=new SVGLoader(), parts=[];
+  for(const id of ['comptes','ecran','son','reseau','manettes','donnees','veille','systeme','brume','infos']){
+    const ic=ICO[id], svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${[].concat(ic.f).map(d=>`<path fill-rule="evenodd" d="${d}"/>`).join('')}</svg>`;
+    const shapes=[]; loader.parse(svg).paths.forEach(p=>shapes.push(...SVGLoader.createShapes(p)));
+    let g=new THREE.ExtrudeGeometry(shapes,{depth:1,bevelEnabled:true,bevelThickness:1.1,bevelSize:.75,bevelOffset:-.65,bevelSegments:5,curveSegments:10});
+    g.center(); g.deleteAttribute('normal'); g.deleteAttribute('uv'); g=mergeVertices(g,1e-4); g.computeVertexNormals();
+    g.scale(.056,-.056,.056);                      // le SVG a l'axe Y vers le bas (les normales restent vers l'extérieur)
+    parts.push({v:g.attributes.position.count,i:g.index.count,pos:g.attributes.position,nor:g.attributes.normal,idx:g.index}); }
+  const size=8+parts.reduce((n,p)=>n+8+p.v*32+p.i*4,0), buf=new ArrayBuffer(size), dv=new DataView(buf); let o=0;
+  [66,73,67,78].forEach(c=>dv.setUint8(o++,c)); dv.setUint32(o,parts.length,true); o+=4;
+  for(const p of parts){ dv.setUint32(o,p.v,true); dv.setUint32(o+4,p.i,true); o+=8;
+    for(let k=0;k<p.v;k++) for(const val of [p.pos.getX(k),p.pos.getY(k),p.pos.getZ(k),p.nor.getX(k),p.nor.getY(k),p.nor.getZ(k),0,0]){ dv.setFloat32(o,val,true); o+=4; }
+    for(let k=0;k<p.i;k++){ dv.setUint32(o,p.idx.getX(k),true); o+=4; } }
+  await post('/asset/models/icones.bin',buf); log('icônes 3D : '+parts.map(p=>p.v+'/'+p.i/3).join(', ')+' (sommets/triangles) → '+(size/1024).toFixed(0)+' Ko'); }
+log('TERMINÉ'); window.bakeDone=true;
+</script></body></html>

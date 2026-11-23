@@ -1,0 +1,28 @@
+# uisim v87 - on the wheel: « En écoute » (the top bar's equalizer, the new track's caption), the task centre's orbs, the apps
+# the charger plugged in / out (the light from the bottom, the notification), the lock screen in Chrome
+0.05 demo batterie 80
+0.5 press A
+1.0 press A
+1.5 press A
+7.0 shot v87-roue-eq
+7.2 demo taches
+8.2 shot v87-roue-taches
+9.0 press R
+9.6 press R
+11.0 shot v87-musique
+11.5 press Down
+12.0 press A
+12.6 shot v87-musique-caption
+13.0 press L
+13.6 press L
+14.6 shot v87-roue-caption
+18.0 demo charge 1
+18.35 shot v87-charge-roue
+18.9 shot v87-charge-roue2
+20.0 demo charge 0
+20.4 shot v87-debranche-roue
+21.0 demo theme 2
+24.0 press B
+24.6 shot v87-chrome-relock
+27.5 shot v87-chrome-invite
+29.0 demo theme 0

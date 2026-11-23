@@ -1,0 +1,17 @@
+# uisim - v73 the PS3 glass icons, XMB display (reglages.ini affichage=0): the categories, a change, a category open
+0.5 press A
+1.0 press A
+1.5 press A
+7.0 press R
+7.5 press R
+8.0 press R
+8.5 press R
+9.0 press R
+11.5 shot vx-categories
+12.0 press Right
+12.15 shot vx-pendant
+13.0 shot vx-apres
+13.5 press Down
+15.0 shot vx-lignes
+15.5 press Down
+15.62 shot vx-lignes-pendant

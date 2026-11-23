@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><title>Brume — enregistrer les sons</title>
+<style>body{background:#0b0d14;color:#cfd6f2;font:15px/1.5 system-ui,sans-serif;padding:20px}pre{color:#9aa4cc}</style></head>
+<body><h1>Enregistrement des sons de la maquette</h1><pre id="log">…</pre>
+<script>
+// Page générée par gen_render_page.py : les fonctions de son ci-dessous sont COPIÉES de la maquette, sans retouche.
+// Chaque son est rejoué hors ligne (OfflineAudioContext) avec les mêmes bus que la maquette (audioStart),
+// puis envoyé en WAV 16 bits stéréo au petit serveur local qui l'écrit dans brume/assets/sounds/.
+let AC, master, revIn, sfxBus, wetBus, OFF=0;
+function rumble(){}
+function playCustom(){ return false; }        // tes sons perso : pas ici
+let curChord={chord:[0,0,0,0],sub:0};                                    // la vibration n'est pas dans le son
+const LOCK_CHORD={chord:[46,53,57,62], sub:34};   // v28 : Si♭ maj7, chaud et rêveur (Yass : le Ré m faisait un peu peur) ; au big bang il se
+const mtof=m=>440*Math.pow(2,(m-69)/12);
+const HB_GAP=.17;
+const STAGE_VOICES=[[0,0,0,0,0],[1,1,0,0,0],[1,1,1,1,0],[1,1,1,1,1]];   // [basse, voix 1, 2, 3, 4]
+const CAM_DUR=1.8;
+const CONSOLES = [
+  {key:'switch',   name:'Switch',           count:'7 jeux',            tint:'#c0506a', chord:[50,57,61,66], sub:38},  // Ré maj7 (v28 : les accords de la toute première fois)
+  {key:'ps2',      name:'PlayStation 2',    count:'exemple · 24 jeux', tint:'#3550c8', chord:[45,52,56,61], sub:33},  // La maj7 ouvert (v28 : les accords de la toute première fois)
+  {key:'gamecube', name:'GameCube',         count:'exemple · 12 jeux', tint:'#5a3cc0', chord:[41,48,52,57], sub:41},  // Fa maj7 (v28 : les accords de la toute première fois)
+  {key:'n64',      name:'Nintendo 64',      count:'exemple · 18 jeux', tint:'#2f8a62', chord:[43,50,55,57], sub:43},  // Sol sus2 (v28 : les accords de la toute première fois)
+  {key:'ps1',      name:'PlayStation',      count:'exemple · 30 jeux', tint:'#6a7494', chord:[47,52,56,63], sub:40},  // Mi maj7 / si (v28 : les accords de la toute première fois)
+  {key:'psp',      name:'PSP',              count:'exemple · 9 jeux',  tint:'#3a62c4', chord:[46,53,57,62], sub:34},  // Si♭ maj7 (v28 : les accords de la toute première fois)
+  {key:'gba',      name:'Game Boy Advance', count:'exemple · 21 jeux', tint:'#5e48b0', chord:[48,55,59,62], sub:36},  // Do maj9 (v28 : les accords de la toute première fois)
+  {key:null,       name:'Ports natifs',     count:'exemple · 6 jeux',  tint:'#a0603a', chord:[51,55,58,65], sub:39},  // Mi♭ add9 (v28 : les accords de la toute première fois)
+];
+const GROW=2.0;
+function makeIR(sec){ const len=AC.sampleRate*sec, b=AC.createBuffer(2,len,AC.sampleRate);
+  for(let ch=0;ch<2;ch++){ const d=b.getChannelData(ch); for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,2.3); } return b; }
+function noiseNode(dur){ const n=Math.max(1,Math.floor(AC.sampleRate*dur)), b=AC.createBuffer(1,n,AC.sampleRate), d=b.getChannelData(0);
+  for(let i=0;i<n;i++) d[i]=Math.random()*2-1; const s=AC.createBufferSource(); s.buffer=b; return s; }
+function bell(m,vel=.1,dur=2.4,delay=0,bus){ if(!AC) return; const t=AC.currentTime+delay, f=mtof(m), out=bus||sfxBus;
+  [[1,'sine',1],[2.01,'sine',.3],[3.98,'triangle',.06]].forEach(([mul,type,g])=>{
+    const o=AC.createOscillator(), e=AC.createGain(); o.type=type; o.frequency.value=f*mul;
+    e.gain.setValueAtTime(.0001,t); e.gain.exponentialRampToValueAtTime(vel*g,t+(bus===wetBus?.03:.006)); e.gain.exponentialRampToValueAtTime(.0001,t+dur/mul);
+    o.connect(e); e.connect(out); o.start(t); o.stop(t+dur+.05); }); }
+function softLow(m,vel=.12,dur=.5){ if(!AC) return; const t=AC.currentTime, o=AC.createOscillator(), g=AC.createGain(); o.type='sine'; o.frequency.value=mtof(m);
+  g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(vel,t+.02); g.gain.exponentialRampToValueAtTime(.0001,t+dur); o.connect(g); g.connect(sfxBus); o.start(t); o.stop(t+dur+.05); }
+function rippleAir(i=0,dur=GROW){ if(!AC) return; const t=AC.currentTime;
+  const n=noiseNode(dur+.1), lp=AC.createBiquadFilter(), g=AC.createGain(); lp.type='lowpass'; lp.Q.value=.7;
+  lp.frequency.setValueAtTime(260,t); lp.frequency.exponentialRampToValueAtTime(1500+350*i,t+dur*.25); lp.frequency.exponentialRampToValueAtTime(420,t+dur);
+  g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(.045,t+dur*.18); g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  n.connect(lp); lp.connect(g); g.connect(wetBus); n.start(t); }
+function shockSound(i=0){ if(!AC) return; const t=AC.currentTime, k=1+.25*i;
+  const o=AC.createOscillator(), g=AC.createGain(); o.type='sine'; o.frequency.setValueAtTime(120,t); o.frequency.exponentialRampToValueAtTime(38,t+.55);
+  g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(.32*k,t+.012); g.gain.exponentialRampToValueAtTime(.0001,t+.75); o.connect(g); g.connect(master); o.start(t); o.stop(t+.8);
+  const n=noiseNode(.9), lp=AC.createBiquadFilter(), ng=AC.createGain(); lp.type='lowpass'; lp.frequency.setValueAtTime(1800,t); lp.frequency.exponentialRampToValueAtTime(140,t+.8);
+  ng.gain.setValueAtTime(.0001,t); ng.gain.exponentialRampToValueAtTime(.13*k,t+.02); ng.gain.exponentialRampToValueAtTime(.0001,t+.85); n.connect(lp); lp.connect(ng); ng.connect(wetBus); n.start(t); }
+function heartbeat(vel=.6){ if(!AC) return; const t0=AC.currentTime;
+  [[0,1,62,44],[HB_GAP,.62,70,50]].forEach(([dt,k,f0,f1])=>{ const t=t0+dt, v=vel*k;
+    const o=AC.createOscillator(), g=AC.createGain(); o.type='sine'; o.frequency.setValueAtTime(f0,t); o.frequency.exponentialRampToValueAtTime(f1,t+.22);
+    g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(v,t+.014); g.gain.exponentialRampToValueAtTime(.0001,t+.42); o.connect(g); g.connect(master); o.start(t); o.stop(t+.45);
+    const h=AC.createOscillator(), hg=AC.createGain(), lp=AC.createBiquadFilter(); h.type='triangle'; h.frequency.setValueAtTime(f0*2,t); h.frequency.exponentialRampToValueAtTime(f1*2,t+.2);
+    lp.type='lowpass'; lp.frequency.value=320; hg.gain.setValueAtTime(.0001,t); hg.gain.exponentialRampToValueAtTime(v*.22,t+.012); hg.gain.exponentialRampToValueAtTime(.0001,t+.26);
+    h.connect(lp); lp.connect(hg); hg.connect(master); h.start(t); h.stop(t+.3);
+    const n=noiseNode(.06), nf=AC.createBiquadFilter(), ng=AC.createGain(); nf.type='lowpass'; nf.frequency.value=260;
+    ng.gain.setValueAtTime(v*.5,t); ng.gain.exponentialRampToValueAtTime(.0001,t+.05); n.connect(nf); nf.connect(ng); ng.connect(master); n.start(t);
+    const s=AC.createGain(); s.gain.value=.25; g.connect(s); s.connect(revIn); });   // un peu d'espace autour
+}
+function unlockChime(){ if(!AC) return; const up=[62,66,69,73,76,78,81];
+  up.forEach((m,i)=>bell(m,.07-.004*i,5.5,.05+i*.075,wetBus));
+  bell(50,.09,7,0,wetBus); bell(57,.06,7,.03,wetBus); softLow(LOCK_CHORD.sub+12,.12,2.2); }
+function sighSound(){ rumble('bas 70 Hz · 25 % → 0 sur 900 ms (la brume se rendort)',900); if(!AC) return; const t=AC.currentTime;
+  const n=noiseNode(1.3), lp=AC.createBiquadFilter(), g=AC.createGain(); lp.type='lowpass'; lp.frequency.setValueAtTime(1600,t); lp.frequency.exponentialRampToValueAtTime(140,t+1.2);
+  g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(.05,t+.12); g.gain.exponentialRampToValueAtTime(.0001,t+1.25); n.connect(lp); lp.connect(g); g.connect(wetBus); n.start(t);
+  const ch=LOCK_CHORD.chord; bell(ch[1]+12,.03,3,0,wetBus); bell(ch[0]+12,.035,4,.22,wetBus); softLow(LOCK_CHORD.sub+12,.07,1.2); }
+function chime(m,pan=0,vel=.03,dur=2.2){ if(!AC) return; const t=AC.currentTime, f=mtof(m), out=AC.createGain(), p=AC.createStereoPanner?AC.createStereoPanner():null;
+  if(p){ p.pan.value=Math.max(-1,Math.min(1,pan)); out.connect(p); p.connect(wetBus); } else out.connect(wetBus);
+  [[1,1],[2.01,.22],[5.43,.05]].forEach(([mul,gm])=>{ const o=AC.createOscillator(), g=AC.createGain(); o.type='sine'; o.frequency.value=f*mul;
+    g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(vel*gm,t+.004); g.gain.exponentialRampToValueAtTime(.0001,t+dur/mul);
+    o.connect(g); g.connect(out); o.start(t); o.stop(t+dur/mul+.05); }); }
+function thock(pan=0,pitch=1,vel=.22){ if(!AC) return; const t=AC.currentTime;
+  const out=AC.createGain(), p=AC.createStereoPanner?AC.createStereoPanner():null; if(p){ p.pan.value=pan; out.connect(p); p.connect(sfxBus); } else out.connect(sfxBus);
+  const o=AC.createOscillator(), g=AC.createGain(); o.type='sine'; o.frequency.setValueAtTime(200*pitch,t); o.frequency.exponentialRampToValueAtTime(92*pitch,t+.09);
+  g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(vel,t+.004); g.gain.exponentialRampToValueAtTime(.0001,t+.16); o.connect(g); g.connect(out); o.start(t); o.stop(t+.18);
+  const c=noiseNode(.01), hp=AC.createBiquadFilter(), cg=AC.createGain(); hp.type='highpass'; hp.frequency.value=2200;
+  cg.gain.setValueAtTime(vel*.45,t); cg.gain.exponentialRampToValueAtTime(.0001,t+.008); c.connect(hp); hp.connect(cg); cg.connect(out); c.start(t);
+  const a=noiseNode(.08), bp=AC.createBiquadFilter(), ag=AC.createGain(); bp.type='bandpass'; bp.frequency.value=900; bp.Q.value=1.2;
+  ag.gain.setValueAtTime(vel*.18,t); ag.gain.exponentialRampToValueAtTime(.0001,t+.07); a.connect(bp); bp.connect(ag); ag.connect(out); a.start(t); }
+function swish(fromPan=0,toPan=0,dur=.45,vel=.05){ if(!AC) return; const t=AC.currentTime;
+  const n=noiseNode(dur+.05), f=AC.createBiquadFilter(), g=AC.createGain(), p=AC.createStereoPanner?AC.createStereoPanner():null;
+  f.type='bandpass'; f.Q.value=1.1; f.frequency.setValueAtTime(380,t); f.frequency.exponentialRampToValueAtTime(2600,t+dur*.7);
+  g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(vel,t+dur*.55); g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  n.connect(f); f.connect(g); if(p){ p.pan.setValueAtTime(fromPan,t); p.pan.linearRampToValueAtTime(toPan,t+dur); g.connect(p); p.connect(wetBus); } else g.connect(wetBus); n.start(t); }
+function whoosh(dir){ if(!AC) return; const t=AC.currentTime, dur=1.3;
+  const src=noiseNode(dur+.1), f=AC.createBiquadFilter(), g=AC.createGain(), pan=AC.createStereoPanner?AC.createStereoPanner():null;
+  f.type='bandpass'; f.Q.value=.9; f.frequency.setValueAtTime(260,t); f.frequency.exponentialRampToValueAtTime(1100,t+dur*.45); f.frequency.exponentialRampToValueAtTime(380,t+dur);
+  g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(.075,t+dur*.4); g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  src.connect(f); f.connect(g);
+  if(pan){ pan.pan.setValueAtTime(dir*.7,t); pan.pan.linearRampToValueAtTime(-dir*.6,t+dur); g.connect(pan); pan.connect(wetBus); } else g.connect(wetBus);
+  src.start(t); src.stop(t+dur+.1); }
+function navSound(dir,ch){ if(playCustom('deplacement',dir*.25)) return; if(!AC) return; const t=AC.currentTime; selectTick(dir*.25);
+  let m=ch.chord[3]+12; while(m>79) m-=12; while(m<72) m+=12;                 // entre ~520 et ~780 Hz
+  const p=AC.createStereoPanner?AC.createStereoPanner():null, out=AC.createGain(); out.gain.value=1;
+  if(p){ p.pan.value=dir*.25; out.connect(p); p.connect(sfxBus); } else out.connect(sfxBus);
+  [[1,.11,.16],[2,.018,.06]].forEach(([mul,v,d])=>{ const o=AC.createOscillator(), g=AC.createGain(); o.type='sine'; o.frequency.value=mtof(m)*mul;
+    g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(v,t+.006); g.gain.exponentialRampToValueAtTime(.0001,t+d); o.connect(g); g.connect(out); o.start(t); o.stop(t+d+.02); });
+  const n=noiseNode(.02), lp=AC.createBiquadFilter(), ng=AC.createGain(); lp.type='lowpass'; lp.frequency.value=1800;   // petit « tok » feutré
+  ng.gain.setValueAtTime(.035,t); ng.gain.exponentialRampToValueAtTime(.0001,t+.018); n.connect(lp); lp.connect(ng); ng.connect(out); n.start(t); }
+function selectTick(pan=0){ if(!AC) return; const t=AC.currentTime;
+  const p=AC.createStereoPanner?AC.createStereoPanner():null, out=AC.createGain(); out.gain.value=1;
+  if(p){ p.pan.value=pan; out.connect(p); p.connect(sfxBus); } else out.connect(sfxBus);
+  [[0,1],[.055,.18]].forEach(([d,v])=>{   // le son, puis son écho 55 ms plus tard
+    const o=AC.createOscillator(), g=AC.createGain(); o.type='sine'; o.frequency.setValueAtTime(1480,t+d); o.frequency.exponentialRampToValueAtTime(1390,t+d+.05);
+    g.gain.setValueAtTime(.0001,t+d); g.gain.exponentialRampToValueAtTime(.11*v,t+d+.003); g.gain.exponentialRampToValueAtTime(.0001,t+d+.09);
+    o.connect(g); g.connect(out); o.start(t+d); o.stop(t+d+.1);
+    const o2=AC.createOscillator(), g2=AC.createGain(); o2.type='sine'; o2.frequency.value=2960;
+    g2.gain.setValueAtTime(.0001,t+d); g2.gain.exponentialRampToValueAtTime(.035*v,t+d+.002); g2.gain.exponentialRampToValueAtTime(.0001,t+d+.035);
+    o2.connect(g2); g2.connect(out); o2.start(t+d); o2.stop(t+d+.05);
+    const n=noiseNode(.02), bp=AC.createBiquadFilter(), ng=AC.createGain(); bp.type='bandpass'; bp.frequency.value=4200; bp.Q.value=1.2;
+    ng.gain.setValueAtTime(.05*v,t+d); ng.gain.exponentialRampToValueAtTime(.0001,t+d+.012); n.connect(bp); bp.connect(ng); ng.connect(out); n.start(t+d); }); }
+function glassTick(pan=0,vel=.09,freq=2600){ if(!AC) return; const t=AC.currentTime;
+  const p=AC.createStereoPanner?AC.createStereoPanner():null; const out=AC.createGain(); out.gain.value=1;
+  if(p){ p.pan.value=pan; out.connect(p); p.connect(sfxBus); } else out.connect(sfxBus);
+  const n=noiseNode(.03), hp=AC.createBiquadFilter(), ng=AC.createGain(); hp.type='highpass'; hp.frequency.value=3500;
+  ng.gain.setValueAtTime(vel*.9,t); ng.gain.exponentialRampToValueAtTime(.0001,t+.025); n.connect(hp); hp.connect(ng); ng.connect(out); n.start(t);
+  const o=AC.createOscillator(), og=AC.createGain(); o.type='sine'; o.frequency.setValueAtTime(freq,t); o.frequency.exponentialRampToValueAtTime(freq*.82,t+.12);
+  og.gain.setValueAtTime(.0001,t); og.gain.exponentialRampToValueAtTime(vel*.7,t+.004); og.gain.exponentialRampToValueAtTime(.0001,t+.14);
+  o.connect(og); og.connect(out); o.start(t); o.stop(t+.16); }
+function popNote(k,pan=0,hero=false){ if(!AC) return; const ch=curChord.chord, m=ch[k%4]+24+12*Math.floor(k/4), t=AC.currentTime;
+  const o=AC.createOscillator(), g=AC.createGain(), p=AC.createStereoPanner?AC.createStereoPanner():null, f=mtof(Math.min(m,96));
+  o.type='sine'; o.frequency.setValueAtTime(f*.94,t); o.frequency.exponentialRampToValueAtTime(f,t+.03);
+  g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(hero?.11:.075,t+.005); g.gain.exponentialRampToValueAtTime(.0001,t+.5);
+  if(p){ p.pan.value=pan; o.connect(g); g.connect(p); p.connect(sfxBus); } else { o.connect(g); g.connect(sfxBus); } o.start(t); o.stop(t+.55);
+  bell(Math.min(m,96),hero?.05:.03,hero?3.5:2.2,.01,wetBus); }
+function angelSwell(ch){ if(!AC) return; const t=AC.currentTime;
+  ch.chord.forEach((m,i)=>{ const f=mtof(m+12), g=AC.createGain(), lp=AC.createBiquadFilter();
+    g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(.02,t+.5+i*.07); g.gain.exponentialRampToValueAtTime(.0001,t+4.2);
+    lp.type='lowpass'; lp.frequency.value=1800; g.connect(lp); lp.connect(wetBus);
+    [-5,5].forEach(dt=>{ const o=AC.createOscillator(); o.type='sine'; o.frequency.value=f; o.detune.value=dt;
+      const v=AC.createOscillator(), vg=AC.createGain(); v.frequency.value=4.4+i*.35; vg.gain.value=f*.004; v.connect(vg); vg.connect(o.frequency);
+      o.connect(g); o.start(t); o.stop(t+4.4); v.start(t); v.stop(t+4.4); }); });
+  bell(ch.chord[2]+24,.012,3.5,.25,wetBus); }
+function bigBangBurst(){ if(!AC) return; const notes=[62,64,66,69,73,74,76,78,81,85,86,88,90,93], t=AC.currentTime;
+  for(let i=0;i<26;i++){ const m=notes[Math.floor(Math.random()*notes.length)]; bell(m,.05*(1-i/34),3.5+Math.random()*2,.02+Math.pow(i/26,1.6)*1.4,wetBus); }
+  [50,57,62,66,69,73,78].forEach((m,i)=>{ const f=mtof(m), g=AC.createGain(), lp=AC.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2200;
+    g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(.022,t+.35+i*.05); g.gain.exponentialRampToValueAtTime(.0001,t+6.5);
+    g.connect(lp); lp.connect(wetBus);
+    [-6,6].forEach(dt=>{ const o=AC.createOscillator(), v=AC.createOscillator(), vg=AC.createGain(); o.frequency.value=f; o.detune.value=dt;
+      v.frequency.value=4.2+i*.3; vg.gain.value=f*.004; v.connect(vg); vg.connect(o.frequency); o.connect(g); o.start(t); o.stop(t+6.7); v.start(t); v.stop(t+6.7); }); }); }
+function crystalTouch(pan=0,vel=.05,midi=84){ if(!AC) return; const t=AC.currentTime, f0=mtof(midi), out=AC.createGain(), p=AC.createStereoPanner?AC.createStereoPanner():null;
+  // v29.2 (Yass : « le toucher doit coller à l'accord ») : des partiels JUSTES (1, 2, 3, 4) -> une vraie note, prise dans
+  // l'accord qui joue ; un soupçon de scintillement (la même note quelques cents à côté) et une petite attaque claire
+  if(p){ p.pan.value=pan; out.connect(p); p.connect(wetBus); } else out.connect(wetBus);
+  [[1,1,2.6],[2,.32,1.4],[3,.12,.8],[4.01,.05,.45]].forEach(([r,g,d])=>{ const o=AC.createOscillator(), e=AC.createGain(); o.type='sine'; o.frequency.value=f0*r;
+    e.gain.setValueAtTime(.0001,t); e.gain.exponentialRampToValueAtTime(vel*g,t+.004); e.gain.exponentialRampToValueAtTime(.0001,t+d); o.connect(e); e.connect(out); o.start(t); o.stop(t+d+.05); });
+  const o2=AC.createOscillator(), e2=AC.createGain(); o2.frequency.value=f0*1.003; e2.gain.setValueAtTime(.0001,t); e2.gain.exponentialRampToValueAtTime(vel*.3,t+.012);
+  e2.gain.exponentialRampToValueAtTime(.0001,t+3); o2.connect(e2); e2.connect(out); o2.start(t); o2.stop(t+3.1); }
+function pageSweep(dir=1){ if(!AC) return; const t=AC.currentTime;
+  const n=noiseNode(1.2), bp=AC.createBiquadFilter(), g=AC.createGain(), p=AC.createStereoPanner?AC.createStereoPanner():null;
+  bp.type='bandpass'; bp.Q.value=6; bp.frequency.setValueAtTime(dir>0?500:2200,t); bp.frequency.exponentialRampToValueAtTime(dir>0?2200:500,t+.5);
+  g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(.05,t+.18); g.gain.exponentialRampToValueAtTime(.0001,t+.75);
+  n.connect(bp); bp.connect(g);
+  if(p){ p.pan.setValueAtTime(-dir*.7,t); p.pan.linearRampToValueAtTime(dir*.7,t+.6); g.connect(p); p.connect(wetBus); } else g.connect(wetBus);
+  n.start(t); n.stop(t+.8);
+  const scale=[69,71,74,76,78,81], seq=dir>0?scale:scale.slice().reverse();
+  seq.forEach((m,i)=>bell(m,.022*(1-i*.08),2.6,.03+i*.045,wetBus));
+  softLow(45,.05,.5); }
+function unlockBloom(){ if(!AC) return; const t=AC.currentTime;
+  const o=AC.createOscillator(), g=AC.createGain(); o.frequency.setValueAtTime(70,t); o.frequency.exponentialRampToValueAtTime(42,t+1.2);
+  g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(.3,t+.03); g.gain.exponentialRampToValueAtTime(.0001,t+2.2); o.connect(g); g.connect(sfxBus); o.start(t); o.stop(t+2.3);
+  [62,64,66,69,71,74,76,78,81,83,86].forEach((m,i)=>bell(m,.034*(1-i*.045),4.5,.08+i*.07,wetBus));
+  [50,57,62,66,69,76].forEach((m,i)=>{ const f=mtof(m), cg=AC.createGain(), lp=AC.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2000;
+    cg.gain.setValueAtTime(.0001,t); cg.gain.exponentialRampToValueAtTime(.024,t+.6+i*.12); cg.gain.exponentialRampToValueAtTime(.0001,t+7.5); cg.connect(lp); lp.connect(wetBus);
+    [-5,5].forEach(dt=>{ const v=AC.createOscillator(), vg=AC.createGain(), w=AC.createOscillator(); w.frequency.value=f; w.detune.value=dt; v.frequency.value=4.1+i*.25; vg.gain.value=f*.0035;
+      v.connect(vg); vg.connect(w.frequency); w.connect(cg); w.start(t); w.stop(t+7.7); v.start(t); v.stop(t+7.7); }); }); }
+const log=t=>{ document.getElementById('log').textContent+='\n'+t; };
+// AC « décalé » : permet de lancer une partie d'un son un peu plus tard (ex. le son d'unlock 90 ms après le boum)
+function wrap(ctx){ return new Proxy(ctx,{ get(t,p){ if(p==='currentTime') return t.currentTime+OFF; const v=Reflect.get(t,p,t); return typeof v==='function'?v.bind(t):v; } }); }
+// les mêmes bus que audioStart() dans la maquette
+function buses(ctx){ AC=wrap(ctx); OFF=0;
+  master=AC.createGain(); master.gain.value=.85; const comp=AC.createDynamicsCompressor(); comp.threshold.value=-16; comp.ratio.value=3;
+  master.connect(comp); comp.connect(AC.destination);
+  const conv=AC.createConvolver(); conv.buffer=makeIR(8); revIn=AC.createGain(); const revOut=AC.createGain(); revOut.gain.value=.6;
+  revIn.connect(conv); conv.connect(revOut); revOut.connect(master);
+  sfxBus=AC.createGain(); sfxBus.gain.value=1.1; sfxBus.connect(master); const s2=AC.createGain(); s2.gain.value=.8; sfxBus.connect(s2); s2.connect(revIn);
+  wetBus=AC.createGain(); wetBus.gain.value=1.3; const wetDry=AC.createGain(); wetDry.gain.value=.18; wetBus.connect(wetDry); wetDry.connect(master); const wetSend=AC.createGain(); wetSend.gain.value=1.4; wetBus.connect(wetSend); wetSend.connect(revIn); }
+function wav(chs,len,sr){ const C=chs.length, b=new ArrayBuffer(44+len*2*C), v=new DataView(b); const S=(o,s)=>[...s].forEach((c,i)=>v.setUint8(o+i,c.charCodeAt(0)));
+  S(0,'RIFF'); v.setUint32(4,36+len*2*C,true); S(8,'WAVE'); S(12,'fmt '); v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,C,true);
+  v.setUint32(24,sr,true); v.setUint32(28,sr*2*C,true); v.setUint16(32,2*C,true); v.setUint16(34,16,true); S(36,'data'); v.setUint32(40,len*2*C,true);
+  let peak=0; for(let i=0;i<len;i++) for(let c=0;c<C;c++){ const x=Math.max(-1,Math.min(1,chs[c][i])); peak=Math.max(peak,Math.abs(x)); v.setInt16(44+(i*C+c)*2,Math.round(x*32767),true); }
+  return {b,peak}; }
+async function save(name,chs,len,sr){ const {b,peak}=wav(chs,len,sr); const r=await fetch('/save/'+name,{method:'POST',body:b});
+  log(`${name} : ${(len/sr).toFixed(2)} s, ${sr} Hz, crête ${(20*Math.log10(peak||1e-9)).toFixed(1)} dB → ${r.ok?'OK':'ERREUR'}`); }
+// un son ponctuel : on joue la recette, on garde jusqu'à ce que la réverbération soit retombée (−66 dB)
+async function oneShot(name,sec,play,sr=24000,ch=2){ const ctx=new OfflineAudioContext(ch,sr*sec,sr); buses(ctx); play(); OFF=0;
+  const buf=await ctx.startRendering(), chs=ch===2?[buf.getChannelData(0),buf.getChannelData(1)]:[buf.getChannelData(0)];
+  let end=buf.length-1; while(end>0&&chs.every(c=>Math.abs(c[end])<5e-4)) end--;
+  const len=Math.min(buf.length,end+Math.round(sr*.05)), fade=Math.round(sr*.03);
+  for(let i=0;i<fade;i++){ const k=i/fade; chs.forEach(c=>c[len-1-i]*=k); }
+  await save(name,chs,len,sr); }
+// la nappe en boucle : même graphe que audioStart(), palier fixé ; 8 s d'amorce (réverb pleine), 24 s de boucle,
+// la fin (4 s) fondue dans le début pour que la boucle soit invisible
+async function padLoop(name,ch,stage,filt){ const sr=8000, PRE=8, L=16, X=4, ctx=new OfflineAudioContext(2,sr*(PRE+L+X),sr); buses(ctx);
+  const ambBus=AC.createGain(); ambBus.gain.value=1; ambBus.connect(master); const send=AC.createGain(); send.gain.value=.85; ambBus.connect(send); send.connect(revIn);
+  const ambFilter=AC.createBiquadFilter(); ambFilter.type='lowpass'; ambFilter.frequency.value=filt; ambFilter.Q.value=.6;
+  const padGain=AC.createGain(); padGain.gain.value=1; ambFilter.connect(padGain); padGain.connect(ambBus); const v=STAGE_VOICES[stage];
+  for(let i=0;i<4;i++){ const g=AC.createGain(); g.gain.value=.045; const st=AC.createGain(); st.gain.value=v[i+1]; g.connect(st); st.connect(ambFilter);
+    [-8,8].forEach(dt=>{ const o=AC.createOscillator(); o.type='sawtooth'; o.detune.value=dt; o.frequency.value=mtof(ch.chord[i]); o.connect(g); o.start(); });
+    const s=AC.createOscillator(); s.type='sine'; s.frequency.value=mtof(ch.chord[i]); const sg=AC.createGain(); sg.gain.value=.7; s.connect(sg); sg.connect(g); s.start();
+    const lfo=AC.createOscillator(); lfo.frequency.value=.05+i*.023; const lg=AC.createGain(); lg.gain.value=.02; lfo.connect(lg); lg.connect(g.gain); lfo.start(); }
+  const sub=AC.createOscillator(); sub.type='sine'; sub.frequency.value=mtof(ch.sub); const subG=AC.createGain(); subG.gain.value=.17; sub.connect(subG);
+  const subStage=AC.createGain(); subStage.gain.value=v[0]; subG.connect(subStage); subStage.connect(padGain); sub.start();
+  const lfo=AC.createOscillator(); lfo.frequency.value=.04; const lg=AC.createGain(); lg.gain.value=200; lfo.connect(lg); lg.connect(ambFilter.frequency); lfo.start();
+  const buf=await ctx.startRendering(), n=L*sr, x=X*sr, o=PRE*sr, out=[new Float32Array(n),new Float32Array(n)];
+  for(let c=0;c<2;c++){ const d=buf.getChannelData(c); for(let i=0;i<n;i++) out[c][i]=d[o+i];
+    for(let i=0;i<x;i++){ const w=i/x*Math.PI/2; out[c][i]=d[o+i]*Math.sin(w)+d[o+n+i]*Math.cos(w); } }
+  await save(name,out,n,sr); }
+(async()=>{ try{
+  const ch=LOCK_CHORD.chord;
+  // sortie de veille (wakeUp)
+  await oneShot('wake',12,()=>{ softLow(LOCK_CHORD.sub+12,.06,1.8); bell(LOCK_CHORD.chord[0]+24,.018,4,.35,wetBus); });
+  // appuis 1 et 2 (pressChord(0) / pressChord(1))
+  // v29.2 (Yass: hear the 3 steps, richer and richer): press 1 = one note; press 2 = two notes and the octave above
+  for(const i of [0,1]) await oneShot('press'+(i+1),14,()=>{ heartbeat(.5+.1*i); bell(ch[i]+12,.095,5.5,.06,wetBus); if(i===1){ bell(ch[0]+12,.05,5.5,.12,wetBus); bell(ch[0]+24,.03,5,.22,wetBus); } rippleAir(i); });
+  // 3e appui : le « big bang » (remarque de Yass : plus d'éclats) = la 3e note de l'accord + le boum de l'onde de choc
+  // le plus fort (shockSound(2)) + le son d'unlock 90 ms plus tard (l'accord mineur se résout en majeur)
+  await oneShot('bigbang',13,()=>{ bell(ch[2]+12,.07,4.5,.06,wetBus); OFF=.09; unlockBloom(); });   // v29 : le boum rond, la harpe pentatonique, le chœur (plus de cascade ni de 7e)
+  // la lumière se retire (goSleep → sighSound)
+  await oneShot('sigh',12,()=>{ sighSound(); });
+  // la note d'un cube touché par la lumière (chime(m,pan,.035,2)) : les 3 notes des 3 cubes, au centre (le panoramique se fait sur la console)
+  for(const m of [70,81,86]) await oneShot('chime'+m,8,()=>{ chime(m,0,.035,2); });   // v28 : notes du Si♭ maj7 (ch[0], ch[2], ch[3] + 24)
+  // la nappe : palier 1 et 2 de l'écran verrouillé (filtre 300 + 330 × appuis), puis la Switch en entier (filtre 720)
+  await padLoop('pad_lock1',LOCK_CHORD,1,380);   // v29.2: step 1 darker (the bass and one low voice, closed filter)
+  await padLoop('pad_lock2',LOCK_CHORD,2,1500);  // v29.2: step 2 clearly brighter (three voices, open filter)
+  // la nappe de chaque console (setChord(CONSOLES[i]) + toutes les voix, filtre 720 sur la roue)
+  for(let i=0;i<CONSOLES.length;i++) await padLoop('pad_c'+i,CONSOLES[i],3,720);
+  // ---- le kit de la roue : des notes de référence que la console rejoue à la bonne hauteur ----
+  const K=16000;   // le kit : mono 16 kHz (rien au-dessus de 8 kHz ; la console place chaque son à gauche/droite)
+  // v29 — toucher un cube (cristal ; la console le rejoue plus ou moins vite selon la taille) et changer de page (gauche / droite)
+  await oneShot('crystal',5,()=>crystalTouch(0,.05,84),24000,1);   // v29.2: a real note (C6), the console sings it on the chord
+  await oneShot('page_r',4,()=>pageSweep(1)); await oneShot('page_l',4,()=>pageSweep(-1));
+  // v28 — la transition angélique : le chœur aérien de chaque console (angelSwell), joué quand on arrive sur elle
+  for(let i=0;i<CONSOLES.length;i++) await oneShot('swell'+i,9,()=>angelSwell(CONSOLES[i]),K,1);
+  // cloches (bell) : vers la réverb (wetBus) et vers les sons d'interface (sfxBus), à 2 hauteurs de référence
+  for(const m of [60,74]){ await oneShot('bellw'+m,10,()=>bell(m,.045,3,0,wetBus),K,1); await oneShot('bells'+m,10,()=>bell(m,.045,3.3,0,sfxBus),K,1); }
+  // l'arrivée d'une console (popNote) : normale et « console choisie », 2 hauteurs de référence
+  for(const m of [70,84]) for(const hero of [false,true]){ curChord={chord:[m-24,0,0,0],sub:0}; await oneShot((hero?'plinkh':'plink')+m,10,()=>popNote(0,0,hero),K,1); }
+  // se déplacer (navSound) : une note entre 72 et 79, au centre (la console la place à gauche/droite)
+  { const st=selectTick; selectTick=()=>{}; await oneShot('nav76',4,()=>navSound(0,{chord:[0,0,0,64],sub:0}),K,1); selectTick=st; }
+  // le « tok » de déplacement (selectTick) : remplaçable par sdmc:/brume/perso/deplacement.wav
+  await oneShot('deplacement',2,()=>selectTick(0),K,1);
+  // le souffle qui traverse la scène quand on tourne (il part du côté où l'on tourne)
+  await oneShot('whoosh',8,()=>whoosh(0),K,1);   // le balayage gauche/droite est refait sur la console
+  // une console qui se pose (thock), un « tic » de verre (appuyer), les notes graves douces, les souffles
+  await oneShot('thock',4,()=>thock(0,1,.22),K,1);
+  await oneShot('tick2400',3,()=>glassTick(0,.1,2400),K,1); await oneShot('tick1700',3,()=>glassTick(0,.08,1700),K,1);
+  for(const [n,d] of [['low06',.6],['low09',.9],['low11',1.1],['low18',CAM_DUR]]) await oneShot(n,6,()=>softLow(50,.1,d),K,1);
+  await oneShot('swishcam',8,()=>swish(0,0,CAM_DUR,.045),K,1);
+  // plonger dans une console (A) : le souffle de openConsole()
+  await oneShot('dive',8,()=>{ const n=noiseNode(1), f=AC.createBiquadFilter(), g=AC.createGain(); f.type='lowpass'; f.frequency.setValueAtTime(200,AC.currentTime); f.frequency.exponentialRampToValueAtTime(1400,AC.currentTime+.9);
+    g.gain.setValueAtTime(.0001,AC.currentTime); g.gain.exponentialRampToValueAtTime(.1,AC.currentTime+.5); g.gain.exponentialRampToValueAtTime(.0001,AC.currentTime+1); n.connect(f); f.connect(g); g.connect(wetBus); n.start(); },K,1);
+  log('TERMINÉ'); window.renderDone=true;
+}catch(e){ log('ERREUR '+e); window.renderDone='err'; } })();
+</script></body></html>

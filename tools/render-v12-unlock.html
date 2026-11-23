@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><title>Brume — le son du déverrouillage de la maquette v12</title>
+<style>body{background:#0b0d14;color:#cfd6f2;font:15px/1.5 system-ui,sans-serif;padding:20px}pre{color:#9aa4cc}</style></head>
+<body><h1>Le déverrouillage de la maquette v12 (maintenir A)</h1><pre id="log">…</pre>
+<script>
+// v38.1 (Yass : « reprends la toute première maquette, celle où il fallait rester appuyé pour unlock, le son y était
+// incroyable »). Les fonctions ci-dessous sont COPIÉES de docs/M1/maquette-brume-v12.html sans retouche (mtof, makeIR,
+// bell, noiseNode, impact) ; les bus sont ceux de render-sounds (= audioStart de la maquette, au niveau des autres sons).
+// Rendu en Ré (l'accord de la v12 pour la 1re console : Ré maj7) ; le moteur le transpose dans la tonalité de la console.
+let AC, master, revIn, sfxBus, wetBus, swell=null;
+const log=t=>{ document.getElementById('log').textContent+='\n'+t; };
+const mtof=m=>440*Math.pow(2,(m-69)/12);
+function makeIR(sec){ const len=AC.sampleRate*sec, b=AC.createBuffer(2,len,AC.sampleRate);
+  for(let ch=0;ch<2;ch++){ const d=b.getChannelData(ch); for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,2.3); } return b; }
+let curChord={chord:[50,57,61,66],sub:38};
+function bell(m,vel=.1,dur=2.4,delay=0,bus){ if(!AC) return; const t=AC.currentTime+delay, f=mtof(m), out=bus||sfxBus;
+  [[1,'sine',1],[2.01,'sine',.3],[3.98,'triangle',.06]].forEach(([mul,type,g])=>{
+    const o=AC.createOscillator(), e=AC.createGain(); o.type=type; o.frequency.value=f*mul;
+    e.gain.setValueAtTime(.0001,t); e.gain.exponentialRampToValueAtTime(vel*g,t+(bus===wetBus?.03:.006)); e.gain.exponentialRampToValueAtTime(.0001,t+dur/mul);
+    o.connect(e); e.connect(out); o.start(t); o.stop(t+dur+.05); }); }
+function noiseNode(dur){ const n=Math.max(1,Math.floor(AC.sampleRate*dur)), b=AC.createBuffer(1,n,AC.sampleRate), d=b.getChannelData(0);
+  for(let i=0;i<n;i++) d[i]=Math.random()*2-1; const s=AC.createBufferSource(); s.buffer=b; return s; }
+// v38.2 (Yass : « le pshhht fait mal aux oreilles... des sons ultra doux et profonds, un gros battement de coeur ») :
+// le boum de la v12 SANS son souffle aigu (le bruit au-dessus de 2,5 kHz est retiré), et un GROS battement de coeur
+// (celui de la maquette : heartbeat(), une note qui descend + une sourdine sous 320 Hz + un coup étouffé sous 260 Hz),
+// puis un second, plus doux, comme un coeur qui se calme ; l'accord en cloches graves et douces, loin dans la réverb.
+const HB_GAP=.17;
+function heartbeat(vel=.6){ if(!AC) return; const t0=AC.currentTime;
+  [[0,1,62,44],[HB_GAP,.62,70,50]].forEach(([dt,k,f0,f1])=>{ const t=t0+dt, v=vel*k;
+    const o=AC.createOscillator(), g=AC.createGain(); o.type='sine'; o.frequency.setValueAtTime(f0,t); o.frequency.exponentialRampToValueAtTime(f1,t+.22);
+    g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(v,t+.014); g.gain.exponentialRampToValueAtTime(.0001,t+.42); o.connect(g); g.connect(master); o.start(t); o.stop(t+.45);
+    const h=AC.createOscillator(), hg=AC.createGain(), lp=AC.createBiquadFilter(); h.type='triangle'; h.frequency.setValueAtTime(f0*2,t); h.frequency.exponentialRampToValueAtTime(f1*2,t+.2);
+    lp.type='lowpass'; lp.frequency.value=320; hg.gain.setValueAtTime(.0001,t); hg.gain.exponentialRampToValueAtTime(v*.22,t+.012); hg.gain.exponentialRampToValueAtTime(.0001,t+.26);
+    h.connect(lp); lp.connect(hg); hg.connect(master); h.start(t); h.stop(t+.3);
+    const n=noiseNode(.06), nf=AC.createBiquadFilter(), ng=AC.createGain(); nf.type='lowpass'; nf.frequency.value=260;
+    ng.gain.setValueAtTime(v*.5,t); ng.gain.exponentialRampToValueAtTime(.0001,t+.05); n.connect(nf); nf.connect(ng); ng.connect(master); n.start(t); }); }
+let OFF=0;
+const at=(d,f)=>{ const real=AC; AC=new Proxy(real,{ get(t,p){ if(p==='currentTime') return t.currentTime+d; const v=Reflect.get(t,p,t); return typeof v==='function'?v.bind(t):v; } }); f(); AC=real; };
+function impact(){ if(!AC) return; const t=AC.currentTime;
+  heartbeat(1.0);                                                                // the big heartbeat
+  at(.95,()=>heartbeat(.5));                                                     // then a softer one: the heart calms
+  const o=AC.createOscillator(), og=AC.createGain(); o.frequency.setValueAtTime(58,t); o.frequency.exponentialRampToValueAtTime(34,t+1.6);
+  og.gain.setValueAtTime(.0001,t); og.gain.exponentialRampToValueAtTime(.6,t+.03); og.gain.exponentialRampToValueAtTime(.0001,t+2.2); o.connect(og); og.connect(master); o.start(t); o.stop(t+2.3);   // the deep boom
+  const ch=curChord.chord; [0,1,2,3].forEach((k,i)=>bell(ch[k],.035,5,.28+i*.12,wetBus));   // the chord, low and soft, far away
+  bell(ch[0]-12,.06,6,.2,wetBus); }
+// les bus (comme render-sounds.tmpl.html : ceux de audioStart, au niveau des autres sons de Brume)
+function buses(ctx){ AC=ctx;
+  master=AC.createGain(); master.gain.value=.85; const comp=AC.createDynamicsCompressor(); comp.threshold.value=-16; comp.ratio.value=3;
+  master.connect(comp); comp.connect(AC.destination);
+  const conv=AC.createConvolver(); conv.buffer=makeIR(8); revIn=AC.createGain(); const revOut=AC.createGain(); revOut.gain.value=.6;
+  revIn.connect(conv); conv.connect(revOut); revOut.connect(master);
+  sfxBus=AC.createGain(); sfxBus.gain.value=1.1; sfxBus.connect(master); const s2=AC.createGain(); s2.gain.value=.8; sfxBus.connect(s2); s2.connect(revIn);
+  wetBus=AC.createGain(); wetBus.gain.value=1.3; const wetDry=AC.createGain(); wetDry.gain.value=.18; wetBus.connect(wetDry); wetDry.connect(master); const wetSend=AC.createGain(); wetSend.gain.value=1.4; wetBus.connect(wetSend); wetSend.connect(revIn); }
+function wav(chs,len,sr){ const C=chs.length, b=new ArrayBuffer(44+len*2*C), v=new DataView(b); const S=(o,s)=>[...s].forEach((c,i)=>v.setUint8(o+i,c.charCodeAt(0)));
+  S(0,'RIFF'); v.setUint32(4,36+len*2*C,true); S(8,'WAVE'); S(12,'fmt '); v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,C,true);
+  v.setUint32(24,sr,true); v.setUint32(28,sr*2*C,true); v.setUint16(32,2*C,true); v.setUint16(34,16,true); S(36,'data'); v.setUint32(40,len*2*C,true);
+  let peak=0; for(let i=0;i<len;i++) for(let c=0;c<C;c++){ const x=Math.max(-1,Math.min(1,chs[c][i])); peak=Math.max(peak,Math.abs(x)); v.setInt16(44+(i*C+c)*2,Math.round(x*32767),true); }
+  return {b,peak}; }
+(async()=>{ try{
+  const sr=24000, sec=14, ctx=new OfflineAudioContext(2,sr*sec,sr); buses(ctx); impact();
+  const buf=await ctx.startRendering(), chs=[buf.getChannelData(0),buf.getChannelData(1)];
+  let end=buf.length-1; while(end>0&&chs.every(c=>Math.abs(c[end])<5e-4)) end--;
+  const len=Math.min(buf.length,end+Math.round(sr*.05)), fade=Math.round(sr*.03);
+  for(let i=0;i<fade;i++){ const k=i/fade; chs.forEach(c=>c[len-1-i]*=k); }
+  const {b,peak}=wav(chs,len,sr); const r=await fetch('/save/unlock12',{method:'POST',body:b});
+  log(`unlock12 : ${(len/sr).toFixed(2)} s, ${sr} Hz, crête ${(20*Math.log10(peak||1e-9)).toFixed(1)} dB → ${r.ok?'OK':'ERREUR'}`);
+  log('FINI');
+}catch(e){ log('ERREUR : '+e); } })();
+</script></body></html>

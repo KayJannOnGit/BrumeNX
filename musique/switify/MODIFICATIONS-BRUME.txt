@@ -1,0 +1,40 @@
+Brume Musique - modified copy of Switify's background service
+==============================================================
+
+Upstream: https://github.com/DomazinUS/Switify, commit e4b8661 (2026-08-20), Switify NRO 0.7.1 /
+background engine 0.5.0, by HiroshiYamauchi. Licence: GPL-3.0-or-later (LICENSE). cspot (vendor/cspot):
+GPL-3.0-or-later. The compact IPC server (phase2/sysmodule/source/ipc_server.*): Beer-Ware (notice kept).
+Every bundled library keeps its licence file beside its sources.
+
+Only the GPL-3.0-or-later parts were taken. Nothing from Switify's Ultrahand overlay (GPL-2.0-only) and
+nothing from its Borealis user interface is included.
+
+Changes made for Brume (2026-11-23, Brume v98):
+- Removed: the overlay, the standalone app's UI files, the IPC client, the Ultrahand toolbox entry, the
+  proof-of-concept main, the unused codecs (AAC, MP3, ALAC, Opus) and the web server (CMake never built
+  them: Vorbis only), and the documentation / tests / fuzzing folders of the bundled libraries.
+- Program id 0x420000000042524D, service name "brm:spot", process name "Brume Musique"
+  (phase2/sysmodule/brume-musique.json, phase2/common/include/switify/ipc_protocol.h), so it never collides
+  with an installed Switify.
+- Files in sdmc:/brume/spotify/ instead of sdmc:/config/Switify/ (credentials, settings, session, logs).
+  An account already paired with Switify is copied once from sdmc:/config/Switify/credentials.json
+  (phase2/sysmodule/engine/main.cpp: importSwitifyCredentials).
+- The service pairs with the phone itself (setInteractiveAuthentication(true) in background_backend.cpp),
+  under the device name "BrumeNX" (app/src/spotify_engine.cpp). While no account is saved, it starts with
+  a network profile that allows mDNS (UDP buffers, 4 BSD sessions); afterwards the original light TCP-only
+  profile (phase2/sysmodule/engine/main.cpp).
+- Log lines renamed. The IPC ABI (commands, 216-byte status, browse structures) is unchanged.
+
+Changes for Brume v99.1 (2026-11-24, after the console test of v99: "cannot start mDNS listener"):
+- vendor/cspot/bell/main/platform/nx/MDNSService.cpp: the console's address from nifm:s, then nifm:u, then a
+  connected UDP socket's local address (libnx gethostid() returns INADDR_LOOPBACK in host byte order on a nifm
+  failure, which the old check missed); hostname "brumenx"; every step logged; sdmc:/brume/spotify/mdns-etat.txt
+  written ("ok <name>" or "echec ...") for the menu's fallback announcer.
+- vendor/cspot/bell/external/mdnssvc/mdnsd.c, mdnssvc.h: mdnsd_log_hook (forced lines, with errno, go to the
+  service's thread-safe log instead of nowhere on the Switch); a Switch create_recv_sock where only socket, bind
+  and the group membership are fatal (membership retried on any interface), the socket closed on failure; a log
+  line when the responder thread cannot start.
+- targets/switch/ZeroconfHttpServer.cpp, app/src/spotify_engine.cpp: a log line per zeroconf request, when the
+  login server listens and when the phone sends its account.
+- phase2/sysmodule/engine/main.cpp: the network profile line shows the real socket configuration and the result
+  of socketInitialize.
