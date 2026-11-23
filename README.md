@@ -9,7 +9,9 @@
 
 <h3 align="center">HEADPHONES RECOMMENDED</h3>
 
-<p align="center"><a href="https://ko-fi.com/kayjann">Support the project on Ko-fi</a></p>
+<p align="center">
+  <a href="https://ko-fi.com/kayjann"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support me on Ko-fi" height="36"></a>
+</p>
 
 ---
 
@@ -96,12 +98,9 @@ other console names and logos are trademarks of their owners, used only to name 
 
 ---
 
-### How this was made
+### Made with AI
 
-To be transparent: **BrumeNX was coded with an AI** (Claude, by Anthropic). I'm not a programmer. I brought the idea,
-the whole artistic direction, every decision, and the testing: every build went on my own Switch, hundreds of rounds
-and a lot of evenings of « no, not like that ». The AI wrote the code; I imagined it, directed it, tested it and
-decided. Everything is open: read it, judge it, improve it.
+C++ isn't my thing (yet), but this project really meant a lot to me, so BrumeNX was coded with AI.
+The code is all open: feel free to read it and improve it.
 
-*En toute transparence : BrumeNX a été codé avec une IA. J'ai apporté l'idée, la direction artistique, chaque décision et
-des centaines de tests sur ma propre Switch ; l'IA a écrit le code.*
+*Le C++ c'est pas encore mon truc, mais ce projet me tenait à cœur : BrumeNX a été codé avec une IA.*
